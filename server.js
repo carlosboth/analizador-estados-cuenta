@@ -112,34 +112,32 @@ async function analyzeWithClaudeAPI(base64Data) {
     if (!process.env.CLAUDE_API_KEY) {
         throw new Error('CLAUDE_API_KEY no está configurada en las variables de entorno');
     }
-
-    const prompt = `
 const prompt = `
 ANALIZA este estado de cuenta bancario PDF mexicano y extrae TODAS las transacciones.
 
-INSTRUCCIONES CRÍTICAS:
+INSTRUCCIONES CRITICAS:
 1. Si NO puedes leer claramente las transacciones, responde con "confidence": 30
-2. Si el PDF está borroso, mal escaneado o ilegible, responde con "confidence": 40
-3. Solo usa "confidence" > 70 si puedes leer CLARAMENTE todas las transacciones
+2. Si el PDF esta borroso, mal escaneado o ilegible, responde con "confidence": 40
+3. Solo usa "confidence" mayor a 70 si puedes leer CLARAMENTE todas las transacciones
 
 PARA BANCOS MEXICANOS (Santander, BBVA, Banamex, HSBC):
-- Busca tablas con: Fecha, Descripción, Monto
+- Busca tablas con: Fecha, Descripcion, Monto
 - Extrae TODOS los movimientos (+/-)
-- Categoriza en: Alimentación, Transporte, Vivienda, Entretenimiento, Salud, Educación, Compras, Servicios, Transferencias, Otros
+- Categoriza en: Alimentacion, Transporte, Vivienda, Entretenimiento, Salud, Educacion, Compras, Servicios, Transferencias, Otros
 
-PATRONES ESPECÍFICOS:
+PATRONES ESPECIFICOS:
 - AMAZON, MERCADOLIBRE = Compras  
 - UBER, GASOLINA, PEMEX = Transporte
-- OXXO, WALMART, SORIANA = Alimentación
+- OXXO, WALMART, SORIANA = Alimentacion
 - CFE, TELMEX, IZZI = Servicios
 - NETFLIX, SPOTIFY = Entretenimiento
 - AXA, SEGUROS = Servicios
 - TRANSFERENCIA, PAGO INTERBANCARIO = Transferencias
 
-FORMATO DE RESPUESTA - SOLO JSON VÁLIDO:
+Responde UNICAMENTE con JSON valido:
 {
   "confidence": 85,
-  "bankDetected": "Santander México",
+  "bankDetected": "Santander Mexico",
   "transactions": [
     {
       "date": "2024-12-11",
@@ -154,19 +152,17 @@ FORMATO DE RESPUESTA - SOLO JSON VÁLIDO:
     "totalExpenses": -23511.10,
     "netBalance": -16544.31,
     "transactionCount": 35,
-    "period": "Diciembre 2024 - Enero 2025"
+    "period": "Diciembre 2024"
   },
   "categoryBreakdown": {
     "Compras": -5000,
-    "Servicios": -4000,
-    "Transferencias": -6260
+    "Servicios": -4000
   }
 }
 
-IMPORTANTE: Si no puedes extraer datos confiables, usa confidence < 50.
-NO INVENTES DATOS. Solo JSON válido, sin texto adicional.
-`;
-
+IMPORTANTE: Si no puedes extraer datos confiables, usa confidence menor a 50.
+NO INVENTES DATOS. Solo JSON valido, sin texto adicional.
+`;    
     try {
         console.log('Llamando a Claude API...');
         
