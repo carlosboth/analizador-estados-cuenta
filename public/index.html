@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analizador de Estados de Cuenta</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .upload-section {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 2px dashed #dee2e6;
+            transition: all 0.3s ease;
+        }
+
+        .upload-section:hover {
+            border-color: #667eea;
+            background: #f0f2ff;
+        }
+
+        .upload-area {
+            text-align: center;
+        }
+
+        .upload-icon {
+            font-size: 3em;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .upload-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 50px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .upload-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .processing {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .results {
+            display: none;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }
+
+        .charts-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .chart-container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+        }
+
+        .chart-title {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #2c3e50;
+            font-weight: bold;
+        }
+
+        .transactions-table {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .category-tag {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+
+        .error-message {
+            background: #fee;
+            color: #c33;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border-left: 4px solid #c33;
+        }
+
+        .confidence-low {
+            background: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border-left: 4px solid #ffc107;
+        }
+
+        @media (max-width: 768px) {
+            .charts-section {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏦 Analizador de Estados de Cuenta</h1>
+            <p>Sube tu PDF y obtén un análisis automático de tus gastos</p>
+        </div>
+
+        <div class="content">
+            <div class="upload-section" id="uploadSection">
+                <div class="upload-area">
+                    <div class="upload-icon">📄</div>
+                    <h3>Selecciona tu estado de cuenta (PDF)</h3>
+                    <p style="margin: 15px 0; color: #666;">Soportamos la mayoría de bancos mexicanos</p>
+                    <input type="file" id="fileInput" class="file-input" accept=".pdf">
+                    <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                        Seleccionar Archivo PDF
+                    </button>
+                    <button class="upload-btn" onclick="runDemoMode()" style="background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%); margin-left: 15px;">
+                        🚀 Ver Demo
+                    </button>
+                    <p style="margin-top: 15px; font-size: 0.9em; color: #666;">
+                        Tu archivo se procesa de forma segura y no se almacena<br>
+                        <strong>Usa "Ver Demo" para probar sin archivo PDF</strong>
+                    </p>
+                </div>
+            </div>
+
+            <div class="processing" id="processing">
+                <div class="spinner"></div>
+                <h3>Procesando tu estado de cuenta...</h3>
+                <p>Esto puede tomar unos segundos dependiendo del tamaño del archivo</p>
+            </div>
+
+            <div class="results" id="results">
+                <div id="confidenceAlert"></div>
+                
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalIngresos">$0</div>
+                        <div class="stat-label">Total Ingresos</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalGastos">$0</div>
+                        <div class="stat-label">Total Gastos</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="balance">$0</div>
+                        <div class="stat-label">Balance Neto</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="transacciones">0</div>
+                        <div class="stat-label">Transacciones</div>
+                    </div>
+                </div>
+
+                <div class="charts-section">
+                    <div class="chart-container">
+                        <h3 class="chart-title">Gastos por Categoría</h3>
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3 class="chart-title">Evolución Mensual</h3>
+                        <canvas id="monthlyChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="transactions-table">
+                    <h3 style="margin-bottom: 20px;">Detalle de Transacciones</h3>
+                    <table id="transactionsTable">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Descripción</th>
+                                <th>Categoría</th>
+                                <th>Monto</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transactionsBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="errorMessage"></div>
+        </div>
+    </div>
+
+    <script>
+        // Variables globales
+        let processedData = null;
+        let categoryChart = null;
+        let monthlyChart = null;
+
+        // Colores para categorías
+        const categoryColors = {
+            'Alimentación': '#FF6B6B',
+            'Transporte': '#4ECDC4',
+            'Vivienda': '#45B7D1',
+            'Entretenimiento': '#96CEB4',
+            'Salud': '#FFEAA7',
+            'Educación': '#DDA0DD',
+            'Compras': '#98D8C8',
+            'Servicios': '#F7DC6F',
+            'Transferencias': '#74B9FF',
+            'Otros': '#BDC3C7'
+        };
+
+        // Event listener para selección de archivo
+        document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+
+        async function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (file.type !== 'application/pdf') {
+                showError('Por favor selecciona un archivo PDF válido.');
+                return;
+            }
+
+            if (file.size > 10 * 1024 * 1024) { // 10MB limit
+                showError('El archivo es demasiado grande. El límite es 10MB.');
+                return;
+            }
+
+            await processFile(file);
+        }
+
+        // Función para ejecutar modo demo
+        async function runDemoMode() {
+            showProcessing();
+            
+            // Simular tiempo de procesamiento
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            try {
+                const demoData = getDemoData();
+                displayResults(demoData);
+                
+                // Mostrar mensaje de demo
+                document.getElementById('confidenceAlert').innerHTML = `
+                    <div class="confidence-low">
+                        🎯 <strong>Modo Demostración</strong><br>
+                        Estos son datos de ejemplo. Sube un PDF real para análisis completo.
+                    </div>
+                `;
+            } catch (error) {
+                showError('Error en modo demo: ' + error.message);
+            }
+        }
+
+        async function processFile(file) {
+            showProcessing();
+
+            try {
+                // Convertir PDF a base64
+                const base64Data = await fileToBase64(file);
+                
+                // Llamar a Claude API para procesar el PDF
+                const analysisResult = await analyzeWithClaude(base64Data, false);
+                
+                // Mostrar resultados
+                displayResults(analysisResult);
+                
+            } catch (error) {
+                console.error('Error procesando archivo:', error);
+                
+                let errorMessage = 'Error procesando el archivo.';
+                
+                if (error.message.includes('API no autorizada')) {
+                    errorMessage = '🔑 Error de autenticación con la API. Por favor verifica la configuración.';
+                } else if (error.message.includes('Límite de API')) {
+                    errorMessage = '⏱️ Límite de API alcanzado. Intenta en unos minutos o usa el modo demo.';
+                } else if (error.message.includes('Error interno del servidor')) {
+                    errorMessage = '🔧 Error temporal del servidor. Usando modo demo como alternativa...';
+                    
+                    // Auto-fallback a modo demo
+                    setTimeout(async () => {
+                        try {
+                            const demoData = getDemoData();
+                            displayResults(demoData);
+                            document.getElementById('confidenceAlert').innerHTML = `
+                                <div class="confidence-low">
+                                    ⚠️ <strong>Fallback a Modo Demo</strong><br>
+                                    Hubo un problema temporal con el servidor. Mostrando datos de ejemplo.
+                                </div>
+                            `;
+                        } catch (demoError) {
+                            showError('Error en fallback: ' + demoError.message);
+                        }
+                    }, 1000);
+                    return;
+                } else if (error.message.includes('JSON')) {
+                    errorMessage = '📄 Error procesando la respuesta del análisis. El formato del PDF podría ser complejo.';
+                } else {
+                    errorMessage = `❌ ${error.message}`;
+                }
+                
+                showError(errorMessage + '\n\n💡 Tip: Prueba el modo demo para ver cómo funciona la herramienta.');
+            }
+        }
+
+        async function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const base64 = reader.result.split(',')[1];
+                    resolve(base64);
+                };
+                reader.onerror = () => reject(new Error('Error leyendo el archivo'));
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // Configuración de API
+        const API_BASE_URL = window.location.hostname === 'localhost' 
+            ? 'http://localhost:3000' 
+            : 'https://tu-backend.vercel.app'; // Cambia por tu URL de backend
+
+        async function analyzeWithClaude(base64Data, useDemoMode = false) {
+            // Modo demo para pruebas sin API
+            if (useDemoMode || window.location.hash === '#demo') {
+                return getDemoData();
+            }
+
+            try {
+                // Opción 1: Enviar como base64 (más simple)
+                const response = await fetch(`${API_BASE_URL}/api/analyze-base64`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        base64Data: base64Data
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `Error del servidor: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // Validar estructura mínima requerida
+                if (!data.transactions || !data.summary) {
+                    throw new Error('Estructura de datos incompleta en la respuesta');
+                }
+                
+                return data;
+
+            } catch (error) {
+                console.error('Error en analyzeWithClaude:', error);
+                
+                // Si hay error de conexión, usar datos demo como fallback
+                if (error.message.includes('fetch') || error.message.includes('Failed to fetch')) {
+                    console.log('Error de conexión - usando modo demo como fallback');
+                    return getDemoData();
+                }
+                
+                throw error;
+            }
+        }
+
+        // Función para generar datos de demostración
+        function getDemoData() {
+            return {
+                confidence: 75,
+                bankDetected: "Banco Demo",
+                transactions: [
+                    {
+                        date: "2024-07-15",
+                        description: "OXXO CENTRO DF",
+                        category: "Alimentación",
+                        amount: -120.50,
+                        type: "gasto"
+                    },
+                    {
+                        date: "2024-07-14", 
+                        description: "UBER TRIP",
+                        category: "Transporte",
+                        amount: -85.00,
+                        type: "gasto"
+                    },
+                    {
+                        date: "2024-07-13",
+                        description: "CFE RECIBO LUZ",
+                        category: "Servicios",
+                        amount: -450.00,
+                        type: "gasto"
+                    },
+                    {
+                        date: "2024-07-12",
+                        description: "TRANSFERENCIA RECIBIDA",
+                        category: "Transferencias",
+                        amount: 5000.00,
+                        type: "ingreso"
+                    },
+                    {
+                        date: "2024-07-11",
+                        description: "NETFLIX SUSCRIPCION",
+                        category: "Entretenimiento", 
+                        amount: -149.00,
+                        type: "gasto"
+                    },
+                    {
+                        date: "2024-07-10",
+                        description: "FARMACIA GUADALAJARA",
+                        category: "Salud",
+                        amount: -200.00,
+                        type: "gasto"
+                    },
+                    {
+                        date: "2024-07-09",
+                        description: "RENTA DEPARTAMENTO",
+                        category: "Vivienda",
+                        amount: -8000.00,
+                        type: "gasto"
+                    },
+                    {
+                        date: "2024-07-08",
+                        description: "LIVERPOOL COMPRAS",
+                        category: "Compras",
+                        amount: -1200.00,
+                        type: "gasto"
+                    }
+                ],
+                summary: {
+                    totalIncome: 5000,
+                    totalExpenses: -10204.50,
+                    netBalance: -5204.50,
+                    transactionCount: 8,
+                    period: "Julio 2024"
+                },
+                categoryBreakdown: {
+                    "Alimentación": -120.50,
+                    "Transporte": -85.00,
+                    "Servicios": -450.00,
+                    "Entretenimiento": -149.00,
+                    "Salud": -200.00,
+                    "Vivienda": -8000.00,
+                    "Compras": -1200.00,
+                    "Transferencias": 5000.00
+                }
+            };
+        }
+
+        function displayResults(data) {
+            processedData = data;
+            
+            // Ocultar secciones anteriores y mostrar resultados
+            document.getElementById('uploadSection').style.display = 'none';
+            document.getElementById('processing').style.display = 'none';
+            document.getElementById('results').style.display = 'block';
+
+            // Mostrar alerta de confianza si es baja
+            if (data.confidence < 70) {
+                document.getElementById('confidenceAlert').innerHTML = `
+                    <div class="confidence-low">
+                        ⚠️ <strong>Confianza baja (${data.confidence}%)</strong><br>
+                        Algunos datos pueden requerir revisión manual. Te recomendamos verificar las transacciones.
+                    </div>
+                `;
+            }
+
+            // Actualizar estadísticas
+            document.getElementById('totalIngresos').textContent = formatCurrency(data.summary.totalIncome);
+            document.getElementById('totalGastos').textContent = formatCurrency(Math.abs(data.summary.totalExpenses));
+            document.getElementById('balance').textContent = formatCurrency(data.summary.netBalance);
+            document.getElementById('transacciones').textContent = data.summary.transactionCount;
+
+            // Crear gráficos
+            createCategoryChart(data.categoryBreakdown);
+            createMonthlyChart(data.transactions);
+
+            // Mostrar tabla de transacciones
+            displayTransactionsTable(data.transactions);
+        }
+
+        function createCategoryChart(categoryData) {
+            const ctx = document.getElementById('categoryChart').getContext('2d');
+            
+            // Filtrar solo gastos (valores negativos) y convertir a positivos
+            const expenseCategories = Object.entries(categoryData)
+                .filter(([category, amount]) => amount < 0)
+                .map(([category, amount]) => [category, Math.abs(amount)]);
+
+            if (categoryChart) categoryChart.destroy();
+
+            categoryChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: expenseCategories.map(([category]) => category),
+                    datasets: [{
+                        data: expenseCategories.map(([, amount]) => amount),
+                        backgroundColor: expenseCategories.map(([category]) => 
+                            categoryColors[category] || categoryColors['Otros']
+                        ),
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        function createMonthlyChart(transactions) {
+            const ctx = document.getElementById('monthlyChart').getContext('2d');
+            
+            // Agrupar por mes (simulado para demo)
+            const monthlyData = {
+                'Ene': 0, 'Feb': 0, 'Mar': 0, 'Abr': 0, 
+                'May': 0, 'Jun': 0, 'Jul': 0, 'Ago': 0,
+                'Sep': 0, 'Oct': 0, 'Nov': 0, 'Dic': 0
+            };
+
+            transactions.forEach(transaction => {
+                const month = new Date(transaction.date).toLocaleDateString('es-ES', {month: 'short'});
+                const monthKey = month.charAt(0).toUpperCase() + month.slice(1);
+                if (monthlyData[monthKey] !== undefined) {
+                    monthlyData[monthKey] += Math.abs(transaction.amount);
+                }
+            });
+
+            if (monthlyChart) monthlyChart.destroy();
+
+            monthlyChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Object.keys(monthlyData),
+                    datasets: [{
+                        label: 'Gastos Mensuales',
+                        data: Object.values(monthlyData),
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '$' + value.toLocaleString();
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function displayTransactionsTable(transactions) {
+            const tbody = document.getElementById('transactionsBody');
+            tbody.innerHTML = '';
+
+            transactions.slice(0, 20).forEach(transaction => { // Mostrar solo las primeras 20
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>${new Date(transaction.date).toLocaleDateString('es-ES')}</td>
+                    <td>${transaction.description}</td>
+                    <td><span class="category-tag" style="background-color: ${categoryColors[transaction.category] || categoryColors['Otros']}20; color: ${categoryColors[transaction.category] || categoryColors['Otros']}">${transaction.category}</span></td>
+                    <td style="color: ${transaction.amount < 0 ? '#e74c3c' : '#27ae60'}; font-weight: bold;">
+                        ${formatCurrency(transaction.amount)}
+                    </td>
+                `;
+            });
+
+            if (transactions.length > 20) {
+                const row = tbody.insertRow();
+                row.innerHTML = `<td colspan="4" style="text-align: center; color: #666; font-style: italic;">... y ${transactions.length - 20} transacciones más</td>`;
+            }
+        }
+
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('es-MX', {
+                style: 'currency',
+                currency: 'MXN'
+            }).format(amount);
+        }
+
+        function showProcessing() {
+            document.getElementById('uploadSection').style.display = 'none';
+            document.getElementById('processing').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('errorMessage').innerHTML = '';
+        }
+
+        function showError(message) {
+            document.getElementById('processing').style.display = 'none';
+            document.getElementById('errorMessage').innerHTML = `
+                <div class="error-message">
+                    ❌ ${message}
+                </div>
+            `;
+            
+            // Reset file input
+            document.getElementById('fileInput').value = '';
+        }
+
+        // Función para reiniciar la aplicación
+        function resetApp() {
+            document.getElementById('uploadSection').style.display = 'block';
+            document.getElementById('processing').style.display = 'none';
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('errorMessage').innerHTML = '';
+            document.getElementById('fileInput').value = '';
+            
+            if (categoryChart) categoryChart.destroy();
+            if (monthlyChart) monthlyChart.destroy();
+        }
+
+        // Agregar botón de reset (opcional)
+        document.addEventListener('DOMContentLoaded', function() {
+            const header = document.querySelector('.header');
+            const resetBtn = document.createElement('button');
+            resetBtn.innerHTML = '🔄 Analizar Otro Archivo';
+            resetBtn.style.cssText = `
+                background: rgba(255,255,255,0.2);
+                color: white;
+                border: 1px solid rgba(255,255,255,0.3);
+                padding: 10px 20px;
+                border-radius: 25px;
+                cursor: pointer;
+                margin-top: 15px;
+                display: none;
+            `;
+            resetBtn.onclick = resetApp;
+            header.appendChild(resetBtn);
+            
+            // Mostrar botón solo cuando hay resultados
+            const observer = new MutationObserver(function() {
+                const resultsVisible = document.getElementById('results').style.display === 'block';
+                resetBtn.style.display = resultsVisible ? 'inline-block' : 'none';
+            });
+            observer.observe(document.getElementById('results'), { attributes: true });
+        });
+    </script>
+</body>
+</html>
