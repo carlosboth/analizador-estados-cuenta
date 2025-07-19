@@ -114,50 +114,58 @@ async function analyzeWithClaudeAPI(base64Data) {
     }
 
     const prompt = `
-Analiza este estado de cuenta bancario PDF mexicano y extrae la información de transacciones.
+const prompt = `
+ANALIZA este estado de cuenta bancario PDF mexicano y extrae TODAS las transacciones.
 
-INSTRUCCIONES ESPECÍFICAS:
-1. Extrae TODAS las transacciones identificando: fecha, descripción completa, y monto
-2. Para BANCOS MEXICANOS comunes (BBVA, Santander, Banamex, HSBC, Banorte, Scotiabank)
-3. Categoriza en: Alimentación, Transporte, Vivienda, Entretenimiento, Salud, Educación, Compras, Servicios, Transferencias, Otros
-4. Identifica tipo: "ingreso" (depósitos, transferencias recibidas) o "gasto" (retiros, pagos, compras)
-5. Maneja formatos de fecha mexicanos (DD/MM/YYYY o DD-MM-YYYY)
-6. Reconoce montos en pesos mexicanos ($X,XXX.XX o $X.XXX,XX)
+INSTRUCCIONES CRÍTICAS:
+1. Si NO puedes leer claramente las transacciones, responde con "confidence": 30
+2. Si el PDF está borroso, mal escaneado o ilegible, responde con "confidence": 40
+3. Solo usa "confidence" > 70 si puedes leer CLARAMENTE todas las transacciones
 
-PATRONES COMUNES A BUSCAR:
-- OXXO, 7ELEVEN, SORIANA, WALMART = Alimentación
-- UBER, GASOLINA, PEMEX = Transporte  
-- CFE, TELMEX, IZZI, MEGACABLE = Servicios
-- NETFLIX, SPOTIFY, AMAZON = Entretenimiento
+PARA BANCOS MEXICANOS (Santander, BBVA, Banamex, HSBC):
+- Busca tablas con: Fecha, Descripción, Monto
+- Extrae TODOS los movimientos (+/-)
+- Categoriza en: Alimentación, Transporte, Vivienda, Entretenimiento, Salud, Educación, Compras, Servicios, Transferencias, Otros
 
-Responde ÚNICAMENTE con JSON válido:
+PATRONES ESPECÍFICOS:
+- AMAZON, MERCADOLIBRE = Compras  
+- UBER, GASOLINA, PEMEX = Transporte
+- OXXO, WALMART, SORIANA = Alimentación
+- CFE, TELMEX, IZZI = Servicios
+- NETFLIX, SPOTIFY = Entretenimiento
+- AXA, SEGUROS = Servicios
+- TRANSFERENCIA, PAGO INTERBANCARIO = Transferencias
+
+FORMATO DE RESPUESTA - SOLO JSON VÁLIDO:
 {
   "confidence": 85,
-  "bankDetected": "BBVA Bancomer",
+  "bankDetected": "Santander México",
   "transactions": [
     {
-      "date": "2024-01-15",
-      "description": "COMPRA OXXO CENTRO DF",
-      "category": "Alimentación", 
-      "amount": -150.50,
+      "date": "2024-12-11",
+      "description": "AMAZON MX",
+      "category": "Compras",
+      "amount": -1180.00,
       "type": "gasto"
     }
   ],
   "summary": {
-    "totalIncome": 15000,
-    "totalExpenses": -8500,
-    "netBalance": 6500,
-    "transactionCount": 45,
-    "period": "Enero 2024"
+    "totalIncome": 6966.79,
+    "totalExpenses": -23511.10,
+    "netBalance": -16544.31,
+    "transactionCount": 35,
+    "period": "Diciembre 2024 - Enero 2025"
   },
   "categoryBreakdown": {
-    "Alimentación": -2500,
-    "Transporte": -1200
+    "Compras": -5000,
+    "Servicios": -4000,
+    "Transferencias": -6260
   }
 }
 
-CRÍTICO: Solo responde JSON válido, sin texto adicional.
-    `;
+IMPORTANTE: Si no puedes extraer datos confiables, usa confidence < 50.
+NO INVENTES DATOS. Solo JSON válido, sin texto adicional.
+`;
 
     try {
         console.log('Llamando a Claude API...');
