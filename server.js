@@ -1,5 +1,5 @@
 // server.js - Backend para Analizador de Estados de Cuenta
-const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const multer = require('multer');
 const fs = require('fs').promises;
@@ -34,40 +34,12 @@ const createUploadsDir = async () => {
 };
 
 // Endpoint principal - servir la aplicación
+// Servir archivos estáticos
+app.use(express.static('public'));
+
+// Endpoint principal - servir la aplicación desde public/index.html  
 app.get('/', (req, res) => {
-    res.send(`
-        <!DOCTYPE html>
-        <html lang="es">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Analizador de Estados de Cuenta</title>
-            <style>
-                body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-                .status { background: #e8f5e8; padding: 15px; border-radius: 8px; margin: 20px 0; }
-            </style>
-        </head>
-        <body>
-            <h1>🏦 Analizador de Estados de Cuenta</h1>
-            <div class="status">
-                <h3>✅ Servidor funcionando correctamente</h3>
-                <p><strong>Endpoints disponibles:</strong></p>
-                <ul>
-                    <li>POST /api/analyze-base64 - Analizar PDF desde base64</li>
-                    <li>POST /api/analyze-pdf - Analizar PDF desde archivo</li>
-                    <li>GET /health - Estado del servidor</li>
-                </ul>
-                <p><strong>Variables configuradas:</strong></p>
-                <ul>
-                    <li>PORT: ${PORT}</li>
-                    <li>CLAUDE_API_KEY: ${process.env.CLAUDE_API_KEY ? '✅ Configurada' : '❌ No configurada'}</li>
-                    <li>NODE_ENV: ${process.env.NODE_ENV || 'development'}</li>
-                </ul>
-            </div>
-            <p>Para usar la aplicación web completa, integra este backend con tu frontend.</p>
-        </body>
-        </html>
-    `);
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // Endpoint para procesar PDFs desde base64
