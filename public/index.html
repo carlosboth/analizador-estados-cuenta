@@ -298,8 +298,8 @@
                         <canvas id="categoryChart"></canvas>
                     </div>
                     <div class="chart-container">
-                        <h3 class="chart-title">Evolución Mensual</h3>
-                        <canvas id="monthlyChart"></canvas>
+                        <h3 class="chart-title">Gastos por Día de la Semana</h3>
+                        <canvas id="weeklyChart"></canvas>
                     </div>
                 </div>
 
@@ -328,7 +328,7 @@
         // Variables globales
         let processedData = null;
         let categoryChart = null;
-        let monthlyChart = null;
+        let weeklyChart = null;
 
         // Colores para categorías
         const categoryColors = {
@@ -664,7 +664,7 @@
 
             // Crear gráficos
             createCategoryChart(data.categoryBreakdown);
-            createMonthlyChart(data.transactions);
+            createWeeklyChart(data.transactions);
 
             // Mostrar tabla de transacciones
             displayTransactionsTable(data.transactions);
@@ -732,48 +732,177 @@
             });
         }
 
-        function createMonthlyChart(transactions) {
-            const ctx = document.getElementById('monthlyChart').getContext('2d');
+        function createWeeklyChart(transactions) {
+            const ctx = document.getElementById('weeklyChart').getContext('2d');
             
-            // Agrupar por mes (simulado para demo)
-            const monthlyData = {
-                'Ene': 0, 'Feb': 0, 'Mar': 0, 'Abr': 0, 
-                'May': 0, 'Jun': 0, 'Jul': 0, 'Ago': 0,
-                'Sep': 0, 'Oct': 0, 'Nov': 0, 'Dic': 0
-            };
-
+            // Días de la semana en español
+            const daysOfWeek = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+            const weeklyData = [0, 0, 0, 0, 0, 0, 0]; // Array para cada día de la semana
+            
+            // Agrupar gastos por día de la semana
             transactions.forEach(transaction => {
-                const month = new Date(transaction.date).toLocaleDateString('es-ES', {month: 'short'});
-                const monthKey = month.charAt(0).toUpperCase() + month.slice(1);
-                if (monthlyData[monthKey] !== undefined) {
-                    monthlyData[monthKey] += Math.abs(transaction.amount);
+                if (transaction.amount < 0) { // Solo gastos (valores negativos)
+                    const date = new Date(transaction.date);
+                    const dayOfWeek = date.getDay(); // 0 = Domingo, 1 = Lunes, etc.
+                    weeklyData[dayOfWeek] += Math.abs(transaction.amount);
                 }
             });
 
-            if (monthlyChart) monthlyChart.destroy();
+            if (weeklyChart) weeklyChart.destroy();
 
-            monthlyChart = new Chart(ctx, {
-                type: 'line',
+            weeklyChart = new Chart(ctx, {
+                type: 'bar',
                 data: {
-                    labels: Object.keys(monthlyData),
+                    labels: daysOfWeek,
                     datasets: [{
-                        label: 'Gastos Mensuales',
-                        data: Object.values(monthlyData),
-                        borderColor: '#667eea',
-                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                        fill: true,
-                        tension: 0.4
+                        label: 'Gastos por Día',
+                        data: weeklyData,
+                        backgroundColor: [
+                            '#FF6B6B', // Domingo - Rojo
+                            '#4ECDC4', // Lunes - Turquesa
+                            '#45B7D1', // Martes - Azul
+                            '#96CEB4', // Miércoles - Verde claro
+                            '#FFEAA7', // Jueves - Amarillo
+                            '#DDA0DD', // Viernes - Lila
+                            '#98D8C8'  // Sábado - Verde agua
+                        ],
+                        borderWidth: 2,
+                        borderColor: '#fff',
+                        borderRadius: 8,
                     }]
                 },
                 options: {
                     responsive: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.parsed.y;
+                                    const total = weeklyData.reduce((sum, val) => sum + val, 0);
+                                    const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                    return `${context.label}: ${value.toLocaleString()} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    },
                     scales: {
                         y: {
                             beginAtZero: true,
                             ticks: {
                                 callback: function(value) {
-                                    return '$' + value.toLocaleString();
+                                    return '
+
+        function displayTransactionsTable(transactions) {
+            const tbody = document.getElementById('transactionsBody');
+            tbody.innerHTML = '';
+
+            // Ordenar transacciones: gastos de mayor a menor (valores negativos más grandes primero)
+            const sortedTransactions = [...transactions].sort((a, b) => {
+                // Si ambos son gastos (negativos), ordenar por valor absoluto descendente
+                if (a.amount < 0 && b.amount < 0) {
+                    return Math.abs(b.amount) - Math.abs(a.amount);
+                }
+                // Si uno es gasto y otro ingreso, gastos primero
+                if (a.amount < 0 && b.amount >= 0) return -1;
+                if (a.amount >= 0 && b.amount < 0) return 1;
+                // Si ambos son ingresos, ordenar por valor descendente
+                return b.amount - a.amount;
+            });
+
+            sortedTransactions.slice(0, 20).forEach(transaction => { // Mostrar solo las primeras 20
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>${new Date(transaction.date).toLocaleDateString('es-ES')}</td>
+                    <td>${transaction.description}</td>
+                    <td><span class="category-tag" style="background-color: ${categoryColors[transaction.category] || categoryColors['Otros']}20; color: ${categoryColors[transaction.category] || categoryColors['Otros']}">${transaction.category}</span></td>
+                    <td style="color: ${transaction.amount < 0 ? '#e74c3c' : '#27ae60'}; font-weight: bold;">
+                        ${formatCurrency(transaction.amount)}
+                    </td>
+                `;
+            });
+
+            if (sortedTransactions.length > 20) {
+                const row = tbody.insertRow();
+                row.innerHTML = `<td colspan="4" style="text-align: center; color: #666; font-style: italic;">... y ${sortedTransactions.length - 20} transacciones más</td>`;
+            }
+        }
+
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('es-MX', {
+                style: 'currency',
+                currency: 'MXN'
+            }).format(amount);
+        }
+
+        function showProcessing() {
+            document.getElementById('uploadSection').style.display = 'none';
+            document.getElementById('processing').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('errorMessage').innerHTML = '';
+        }
+
+        function showError(message) {
+            document.getElementById('processing').style.display = 'none';
+            document.getElementById('errorMessage').innerHTML = `
+                <div class="error-message">
+                    ❌ ${message}
+                </div>
+            `;
+            
+            // Reset file input
+            document.getElementById('fileInput').value = '';
+        }
+
+        // Función para reiniciar la aplicación
+        function resetApp() {
+            document.getElementById('uploadSection').style.display = 'block';
+            document.getElementById('processing').style.display = 'none';
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('errorMessage').innerHTML = '';
+            document.getElementById('fileInput').value = '';
+            
+            if (categoryChart) categoryChart.destroy();
+            if (weeklyChart) weeklyChart.destroy();
+        }
+
+        // Agregar botón de reset (opcional)
+        document.addEventListener('DOMContentLoaded', function() {
+            const header = document.querySelector('.header');
+            const resetBtn = document.createElement('button');
+            resetBtn.innerHTML = '🔄 Analizar Otro Archivo';
+            resetBtn.style.cssText = `
+                background: rgba(255,255,255,0.2);
+                color: white;
+                border: 1px solid rgba(255,255,255,0.3);
+                padding: 10px 20px;
+                border-radius: 25px;
+                cursor: pointer;
+                margin-top: 15px;
+                display: none;
+            `;
+            resetBtn.onclick = resetApp;
+            header.appendChild(resetBtn);
+            
+            // Mostrar botón solo cuando hay resultados
+            const observer = new MutationObserver(function() {
+                const resultsVisible = document.getElementById('results').style.display === 'block';
+                resetBtn.style.display = resultsVisible ? 'inline-block' : 'none';
+            });
+            observer.observe(document.getElementById('results'), { attributes: true });
+        });
+    </script>
+</body>
+</html> + value.toLocaleString();
                                 }
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 0
                             }
                         }
                     }
