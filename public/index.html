@@ -785,7 +785,20 @@
             const tbody = document.getElementById('transactionsBody');
             tbody.innerHTML = '';
 
-            transactions.slice(0, 20).forEach(transaction => { // Mostrar solo las primeras 20
+            // Ordenar transacciones: gastos de mayor a menor (valores negativos más grandes primero)
+            const sortedTransactions = [...transactions].sort((a, b) => {
+                // Si ambos son gastos (negativos), ordenar por valor absoluto descendente
+                if (a.amount < 0 && b.amount < 0) {
+                    return Math.abs(b.amount) - Math.abs(a.amount);
+                }
+                // Si uno es gasto y otro ingreso, gastos primero
+                if (a.amount < 0 && b.amount >= 0) return -1;
+                if (a.amount >= 0 && b.amount < 0) return 1;
+                // Si ambos son ingresos, ordenar por valor descendente
+                return b.amount - a.amount;
+            });
+
+            sortedTransactions.slice(0, 20).forEach(transaction => { // Mostrar solo las primeras 20
                 const row = tbody.insertRow();
                 row.innerHTML = `
                     <td>${new Date(transaction.date).toLocaleDateString('es-ES')}</td>
@@ -797,9 +810,9 @@
                 `;
             });
 
-            if (transactions.length > 20) {
+            if (sortedTransactions.length > 20) {
                 const row = tbody.insertRow();
-                row.innerHTML = `<td colspan="4" style="text-align: center; color: #666; font-style: italic;">... y ${transactions.length - 20} transacciones más</td>`;
+                row.innerHTML = `<td colspan="4" style="text-align: center; color: #666; font-style: italic;">... y ${sortedTransactions.length - 20} transacciones más</td>`;
             }
         }
 
