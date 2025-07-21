@@ -267,6 +267,12 @@
             <div class="results" id="results">
                 <div id="confidenceAlert"></div>
                 
+                <!-- Indicador de Salud Financiera -->
+                <div id="financialHealth" style="background: white; border-radius: 15px; padding: 20px; margin-bottom: 30px; box-shadow: 0 5px 15px rgba(0,0,0,0.08); text-align: center;">
+                    <h3 style="margin-bottom: 15px; color: #2c3e50;">💊 Salud Financiera</h3>
+                    <div id="healthIndicator"></div>
+                </div>
+                
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-value" id="totalIngresos">$0</div>
@@ -444,8 +450,9 @@
             });
         }
 
-      // Configuración de API  
-        const API_BASE_URL = window.location.origin;
+        // Configuración de API - IMPORTANTE: Cambia esta URL después del despliegue
+        const API_BASE_URL = window.location.origin; // Usa el mismo dominio que Railway te asigne
+
         async function analyzeWithClaude(base64Data, useDemoMode = false) {
             // Modo demo para pruebas sin API
             if (useDemoMode || window.location.hash === '#demo') {
@@ -592,11 +599,68 @@
                 `;
             }
 
-            // Actualizar estadísticas
-            document.getElementById('totalIngresos').textContent = formatCurrency(data.summary.totalIncome);
-            document.getElementById('totalGastos').textContent = formatCurrency(Math.abs(data.summary.totalExpenses));
-            document.getElementById('balance').textContent = formatCurrency(data.summary.netBalance);
-            document.getElementById('transacciones').textContent = data.summary.transactionCount;
+            // Calcular porcentajes
+            const totalIncome = Math.abs(data.summary.totalIncome);
+            const totalExpenses = Math.abs(data.summary.totalExpenses);
+            const expenseRatio = totalIncome > 0 ? (totalExpenses / totalIncome * 100) : 0;
+            const balanceRatio = totalIncome > 0 ? (data.summary.netBalance / totalIncome * 100) : 0;
+
+            // Actualizar estadísticas con porcentajes
+            document.getElementById('totalIngresos').innerHTML = `
+                ${formatCurrency(data.summary.totalIncome)}
+                <div style="font-size: 0.7em; color: #27ae60; margin-top: 5px;">💰 Base de ingresos</div>
+            `;
+            
+            document.getElementById('totalGastos').innerHTML = `
+                ${formatCurrency(Math.abs(data.summary.totalExpenses))}
+                <div style="font-size: 0.7em; color: ${expenseRatio > 100 ? '#e74c3c' : '#f39c12'}; margin-top: 5px;">
+                    📊 ${expenseRatio.toFixed(0)}% de tus ingresos
+                </div>
+            `;
+            
+            document.getElementById('balance').innerHTML = `
+                ${formatCurrency(data.summary.netBalance)}
+                <div style="font-size: 0.7em; color: ${data.summary.netBalance < 0 ? '#e74c3c' : '#27ae60'}; margin-top: 5px;">
+                    ${data.summary.netBalance >= 0 ? '📈 Superávit' : '📉 Déficit'} ${Math.abs(balanceRatio).toFixed(0)}%
+                </div>
+            `;
+            
+            document.getElementById('transacciones').innerHTML = `
+                ${data.summary.transactionCount}
+                <div style="font-size: 0.7em; color: #7f8c8d; margin-top: 5px;">
+                    📋 ${(totalExpenses / data.summary.transactionCount).toFixed(0)} promedio
+                </div>
+            `;
+            
+            // Indicador de salud financiera
+            let healthColor, healthEmoji, healthText, healthAdvice;
+            if (expenseRatio <= 80) {
+                healthColor = '#27ae60';
+                healthEmoji = '🟢';
+                healthText = 'Excelente';
+                healthAdvice = 'Mantén este buen hábito de ahorro';
+            } else if (expenseRatio <= 100) {
+                healthColor = '#f39c12';
+                healthEmoji = '🟡';
+                healthText = 'Precaución';
+                healthAdvice = 'Trata de reducir gastos un 10-15%';
+            } else {
+                healthColor = '#e74c3c';
+                healthEmoji = '🔴';
+                healthText = 'Crítico';
+                healthAdvice = 'Urgente: Revisa y recorta gastos inmediatamente';
+            }
+
+            document.getElementById('healthIndicator').innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; gap: 20px; flex-wrap: wrap;">
+                    <div style="font-size: 3em;">${healthEmoji}</div>
+                    <div style="text-align: left;">
+                        <div style="font-size: 1.5em; font-weight: bold; color: ${healthColor};">${healthText}</div>
+                        <div style="color: #7f8c8d; margin: 5px 0;">Gastas ${expenseRatio.toFixed(0)}% de tus ingresos</div>
+                        <div style="font-size: 0.9em; color: ${healthColor}; font-weight: 500;">${healthAdvice}</div>
+                    </div>
+                </div>
+            `;
 
             // Crear gráficos
             createCategoryChart(data.categoryBreakdown);
@@ -613,6 +677,8 @@
             const expenseCategories = Object.entries(categoryData)
                 .filter(([category, amount]) => amount < 0)
                 .map(([category, amount]) => [category, Math.abs(amount)]);
+
+            const totalExpenses = expenseCategories.reduce((sum, [, amount]) => sum + amount, 0);
 
             if (categoryChart) categoryChart.destroy();
 
@@ -633,7 +699,33 @@
                     responsive: true,
                     plugins: {
                         legend: {
-                            position: 'bottom'
+                            position: 'bottom',
+                            labels: {
+                                generateLabels: function(chart) {
+                                    const data = chart.data;
+                                    return data.labels.map((label, i) => {
+                                        const value = data.datasets[0].data[i];
+                                        const percentage = ((value / totalExpenses) * 100).toFixed(1);
+                                        return {
+                                            text: `${label}: ${percentage}%`,
+                                            fillStyle: data.datasets[0].backgroundColor[i],
+                                            strokeStyle: data.datasets[0].borderColor,
+                                            lineWidth: data.datasets[0].borderWidth,
+                                            index: i
+                                        };
+                                    });
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed;
+                                    const percentage = ((value / totalExpenses) * 100).toFixed(1);
+                                    return `${label}: ${value.toLocaleString()} (${percentage}%)`;
+                                }
+                            }
                         }
                     }
                 }
