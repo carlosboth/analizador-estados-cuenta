@@ -163,6 +163,8 @@ Responde UNICAMENTE con JSON valido:
 IMPORTANTE: Si no puedes extraer datos confiables, usa confidence menor a 50.
 NO INVENTES DATOS. Solo JSON valido, sin texto adicional.
 `;    
+    console.log('=== INICIANDO ANALISIS CON CLAUDE ===');
+    console.log('Tamaño del PDF (base64):', base64Data.length);
     try {
         console.log('Llamando a Claude API...');
         
@@ -173,6 +175,7 @@ NO INVENTES DATOS. Solo JSON valido, sin texto adicional.
                 "x-api-key": process.env.CLAUDE_API_KEY,
                 "anthropic-version": "2023-06-01"
             },
+            
             body: JSON.stringify({
                 model: "claude-3-sonnet-20240229",
                 max_tokens: 4000,
@@ -197,20 +200,22 @@ NO INVENTES DATOS. Solo JSON valido, sin texto adicional.
                 ],
             })
         });
+console.log('Claude API response status:', response.status);
 
-        if (!response.ok) {
+            if (!response.ok) {
             const errorData = await response.text();
             console.error('Claude API Error:', response.status, errorData);
             throw new Error(`Claude API Error: ${response.status} - ${errorData}`);
         }
 
         const data = await response.json();
-        
+        console.log('Claude API respuesta exitosa');
         if (!data.content || !data.content[0] || !data.content[0].text) {
             throw new Error('Respuesta de Claude API inválida');
         }
 
         let responseText = data.content[0].text;
+        console.log('Respuesta de Claude (primeros 500 chars):', responseText.substring(0, 500));
         console.log('Respuesta de Claude recibida, parseando...');
         
         // Limpiar respuesta de markdown si existe
@@ -218,6 +223,8 @@ NO INVENTES DATOS. Solo JSON valido, sin texto adicional.
         
         // Validar que sea JSON válido
         const parsedData = JSON.parse(responseText);
+        console.log('Confianza detectada:', parsedData.confidence);
+        console.log('Transacciones encontradas:', parsedData.transactions?.length || 0);
         
         // Validar estructura mínima requerida
         if (!parsedData.transactions || !parsedData.summary) {
@@ -228,7 +235,9 @@ NO INVENTES DATOS. Solo JSON valido, sin texto adicional.
         return parsedData;
 
     } catch (error) {
-        console.error('Error en Claude API:', error);
+        console.error('=== ERROR EN CLAUDE API ===');
+        console.error('Tipo de error:', error.name);
+        console.error('Mensaje:', error.message);
         throw error;
     }
 }
