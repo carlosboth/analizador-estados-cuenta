@@ -444,11 +444,8 @@
             });
         }
 
-        // Configuración de API
-        const API_BASE_URL = window.location.hostname === 'localhost' 
-            ? 'http://localhost:3000' 
-            : 'https://tu-backend.vercel.app'; // Cambia por tu URL de backend
-
+      // Configuración de API  
+        const API_BASE_URL = window.location.origin;
         async function analyzeWithClaude(base64Data, useDemoMode = false) {
             // Modo demo para pruebas sin API
             if (useDemoMode || window.location.hash === '#demo') {
