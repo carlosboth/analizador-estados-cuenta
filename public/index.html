@@ -793,7 +793,8 @@
                             beginAtZero: true,
                             ticks: {
                                 callback: function(value) {
-                                    return '
+        return '$' + value.toLocaleString();
+        }
 
         function displayTransactionsTable(transactions) {
             const tbody = document.getElementById('transactionsBody');
