@@ -330,6 +330,191 @@
         let categoryChart = null;
         let weeklyChart = null;
 
+        // Categorías para análisis de transacciones
+        const categories = {
+            'Ingresos': [
+                'spei recibido', 'deposito', 'depósito', 'transferencia recibida', 
+                'pago de nomina', 'nómina', 'salario', 'sueldo', 'abono', 'intereses', 
+                'rendimiento', 'cashback', 'reembolso', 'devolución'
+            ],
+            'Alimentación': [
+                'supermercado', 'mercado', 'abarrotes', 'tienda', 'grocery', 
+                'soriana', 'walmart', 'chedraui', 'oxxo', 'seven', '7-eleven', 
+                'farmacia guadalajara', 'benavides', 'bodega aurrera'
+            ],
+            'Restaurantes': [
+                'restaurante', 'restaurant', 'comida', 'food', 'burger', 'pizza', 'taco', 
+                'café', 'coffee', 'bar', 'mc', 'kfc', 'subway', 'dominos', 
+                'uber eats', 'rappi', 'didi food', 'starbucks', 'vips'
+            ],
+            'Transporte': [
+                'gasolina', 'gas', 'uber', 'taxi', 'metro', 'autobus', 'parking', 
+                'estacionamiento', 'pemex', 'shell', 'bp', 'mobil', 'didi', 'beat'
+            ],
+            'Entretenimiento': [
+                'cine', 'cinema', 'netflix', 'spotify', 'juego', 'game', 'teatro', 
+                'concierto', 'club', 'gym', 'deporte', 'cinepolis', 'cinemex'
+            ],
+            'Servicios': [
+                'luz', 'agua', 'gas', 'telefono', 'internet', 'cable', 
+                'cfe', 'telmex', 'telcel', 'att', 'movistar', 'izzi', 'sky'
+            ],
+            'Salud': [
+                'farmacia', 'hospital', 'doctor', 'medicina', 'dental', 'laboratorio', 
+                'clinica', 'seguro', 'similares', 'issste', 'imss'
+            ],
+            'Compras': [
+                'amazon', 'mercadolibre', 'liverpool', 'palacio', 'sears', 'tienda', 
+                'ropa', 'zapatos', 'electronico', 'elektra', 'coppel'
+            ],
+            'Efectivo': [
+                'atm', 'cajero', 'retiro', 'efectivo', 'cash', 'disposicion'
+            ],
+            'Transferencias': [
+                'spei enviado', 'transferencia', 'pago cuenta tercero', 'pago a tercero'
+            ],
+            'Vivienda': [
+                'renta', 'alquiler', 'hipoteca', 'predial', 'mantenimiento'
+            ],
+            'Educación': [
+                'colegiatura', 'universidad', 'curso', 'libro', 'material escolar'
+            ],
+            'Otros': []
+        };
+
+        // Función para categorizar transacciones
+        function categorizeTransaction(description) {
+            if (!description) return 'Otros';
+            
+            const desc = description.toLowerCase();
+            
+            // Revisar cada categoría y sus palabras clave
+            for (const [category, keywords] of Object.entries(categories)) {
+                if (category === 'Otros') continue; // Saltear 'Otros'
+                
+                for (const keyword of keywords) {
+                    if (desc.includes(keyword.toLowerCase())) {
+                        return category;
+                    }
+                }
+            }
+            
+            return 'Otros'; // Si no encuentra coincidencias
+        }
+
+        // ===================
+        // DETECTOR DE TIPO DE CUENTA
+        // ===================
+        class AccountTypeDetector {
+            static detect(pdfText) {
+                const textLower = pdfText.toLowerCase();
+                
+                // Indicadores de TARJETA DE CRÉDITO
+                const creditIndicators = [
+                    "tarjeta de crédito",
+                    "tarjeta de credito", 
+                    "credit card",
+                    "fecha límite de pago",
+                    "fecha limite de pago",
+                    "pago mínimo",
+                    "pago minimo",
+                    "pago para no generar intereses",
+                    "intereses moratorios",
+                    "cargos regulares",
+                    "compras a meses",
+                    "compras diferidas",
+                    "fecha de corte",
+                    "saldo deudor",
+                    "línea de crédito",
+                    "linea de credito",
+                    "cargos y compras",
+                    "total cargos",
+                    "santander free",
+                    "santander gold",
+                    "santander platinum",
+                    "bbva oro",
+                    "bbva platino"
+                ];
+                
+                // Indicadores de CUENTA DE DÉBITO/CHEQUES  
+                const debitIndicators = [
+                    "cuenta de cheques",
+                    "cuenta corriente", 
+                    "saldo promedio",
+                    "depósitos",
+                    "depositos",
+                    "retiros cajero",
+                    "comisiones por manejo",
+                    "estado de cuenta corriente",
+                    "saldo inicial",
+                    "saldo final",
+                    "cuenta de débito",
+                    "cuenta de debito"
+                ];
+                
+                // Contar coincidencias
+                let creditScore = 0;
+                let debitScore = 0;
+                
+                creditIndicators.forEach(indicator => {
+                    if (textLower.includes(indicator)) {
+                        creditScore++;
+                        console.log(`✅ Indicador crédito encontrado: '${indicator}'`);
+                    }
+                });
+                
+                debitIndicators.forEach(indicator => {
+                    if (textLower.includes(indicator)) {
+                        debitScore++;
+                        console.log(`✅ Indicador débito encontrado: '${indicator}'`);
+                    }
+                });
+                
+                console.log(`📊 Credit score: ${creditScore}, Debit score: ${debitScore}`);
+                
+                // Decisión
+                if (creditScore > debitScore) {
+                    return "CREDIT_CARD";
+                } else if (debitScore > creditScore) {
+                    return "DEBIT_ACCOUNT";
+                } else {
+                    // Empate: usar heurísticas adicionales
+                    if (textLower.includes("pago mínimo") || textLower.includes("fecha límite")) {
+                        return "CREDIT_CARD";
+                    } else if (textLower.includes("saldo inicial") || textLower.includes("retiros")) {
+                        return "DEBIT_ACCOUNT";
+                    } else {
+                        return "DEBIT_ACCOUNT"; // Default
+                    }
+                }
+            }
+            
+            static getBankName(pdfText) {
+                const textLower = pdfText.toLowerCase();
+                
+                const banks = {
+                    "santander": ["santander", "banco santander"],
+                    "bbva": ["bbva", "bancomer"],
+                    "banamex": ["banamex", "citibanamex"],
+                    "banorte": ["banorte", "banco banorte"],
+                    "hsbc": ["hsbc", "banco hsbc"],
+                    "scotiabank": ["scotiabank", "banco scotia"],
+                    "inbursa": ["inbursa", "banco inbursa"],
+                    "nu": ["nu méxico", "cuenta nu"]
+                };
+                
+                for (const [bankName, identifiers] of Object.entries(banks)) {
+                    for (const identifier of identifiers) {
+                        if (textLower.includes(identifier)) {
+                            return bankName.toUpperCase();
+                        }
+                    }
+                }
+                
+                return "UNKNOWN";
+            }
+        }
+
         // Colores para categorías
         const categoryColors = {
             'Alimentación': '#FF6B6B',
@@ -459,14 +644,20 @@
             }
 
             try {
-                // Opción 1: Enviar como base64 (más simple)
+                // 🆕 Para esta primera versión, enviaremos la información del tipo de cuenta
+                // al servidor junto con el base64
+                
                 const response = await fetch(`${API_BASE_URL}/api/analyze-base64`, {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
                     },
                     body: JSON.stringify({
-                        base64Data: base64Data
+                        base64Data: base64Data,
+                        // 🆕 Incluir información para mejorar el análisis
+                        enhancedAnalysis: true,
+                        categories: Object.keys(categories), // Enviar categorías disponibles
+                        detectCreditCard: true // Pedir detección de tipo de cuenta
                     })
                 });
 
@@ -476,6 +667,13 @@
                 }
 
                 const data = await response.json();
+                
+                // 🆕 Si el servidor no detectó el tipo, lo detectamos aquí como backup
+                if (!data.accountType && data.pdfText) {
+                    data.accountType = AccountTypeDetector.detect(data.pdfText);
+                    data.bankDetected = AccountTypeDetector.getBankName(data.pdfText);
+                    console.log(`🔍 Detectado en frontend: ${data.accountType} de ${data.bankDetected}`);
+                }
                 
                 // Validar estructura mínima requerida
                 if (!data.transactions || !data.summary) {
@@ -496,7 +694,6 @@
                 throw error;
             }
         }
-
         // Función para generar datos de demostración
         function getDemoData() {
             return {
@@ -576,7 +773,9 @@
                     "Vivienda": -8000.00,
                     "Compras": -1200.00,
                     "Transferencias": 5000.00
-                }
+                },
+                 accountType: "DEBIT_ACCOUNT",
+                 pdfText: "Estado de cuenta demo"
             };
         }
         function displayResults(data) {
@@ -597,56 +796,118 @@
                 `;
             }
 
-            // Calcular porcentajes
+            // 🆕 Mostrar información de tipo de cuenta detectado
+            if (data.accountType && data.bankDetected) {
+                const accountTypeLabel = data.accountType === 'CREDIT_CARD' ? '💳 Tarjeta de Crédito' : '🏦 Cuenta de Débito';
+                document.getElementById('confidenceAlert').innerHTML += `
+                    <div style="background: #e3f2fd; border: 1px solid #2196f3; border-radius: 10px; padding: 15px; margin: 15px 0; text-align: center;">
+                        <strong>🔍 Detectado:</strong> ${accountTypeLabel} de ${data.bankDetected}
+                    </div>
+                `;
+            }
+
+            // Calcular porcentajes (ajustado para tarjetas de crédito)
             const totalIncome = Math.abs(data.summary.totalIncome);
             const totalExpenses = Math.abs(data.summary.totalExpenses);
-            const expenseRatio = totalIncome > 0 ? (totalExpenses / totalIncome * 100) : 0;
-            const balanceRatio = totalIncome > 0 ? (data.summary.netBalance / totalIncome * 100) : 0;
+            
+            // Para tarjetas de crédito, el análisis es diferente
+            let expenseRatio, balanceRatio;
+            if (data.accountType === 'CREDIT_CARD') {
+                // En tarjetas, no hay "ingresos", solo gastos
+                expenseRatio = 100; // Los gastos son el 100% de lo analizado
+                balanceRatio = 0;
+            } else {
+                // Cuenta normal
+                expenseRatio = totalIncome > 0 ? (totalExpenses / totalIncome * 100) : 0;
+                balanceRatio = totalIncome > 0 ? (data.summary.netBalance / totalIncome * 100) : 0;
+            }
 
             // Actualizar estadísticas con porcentajes
-            document.getElementById('totalIngresos').innerHTML = `
-                ${formatCurrency(data.summary.totalIncome)}
-                <div style="font-size: 0.7em; color: #27ae60; margin-top: 5px;">💰 Base de ingresos</div>
-            `;
-            
-            document.getElementById('totalGastos').innerHTML = `
-                ${formatCurrency(Math.abs(data.summary.totalExpenses))}
-                <div style="font-size: 0.7em; color: ${expenseRatio > 100 ? '#e74c3c' : '#f39c12'}; margin-top: 5px;">
-                    📊 ${expenseRatio.toFixed(0)}% de tus ingresos
-                </div>
-            `;
-            
-            document.getElementById('balance').innerHTML = `
-                ${formatCurrency(data.summary.netBalance)}
-                <div style="font-size: 0.7em; color: ${data.summary.netBalance < 0 ? '#e74c3c' : '#27ae60'}; margin-top: 5px;">
-                    ${data.summary.netBalance >= 0 ? '📈 Superávit' : '📉 Déficit'} ${Math.abs(balanceRatio).toFixed(0)}%
-                </div>
-            `;
+            if (data.accountType === 'CREDIT_CARD') {
+                // 💳 VISTA ESPECÍFICA PARA TARJETAS DE CRÉDITO
+                document.getElementById('totalIngresos').innerHTML = `
+                    ${formatCurrency(0)}
+                    <div style="font-size: 0.7em; color: #666; margin-top: 5px;">💳 Tarjeta de Crédito</div>
+                `;
+                
+                document.getElementById('totalGastos').innerHTML = `
+                    ${formatCurrency(totalExpenses)}
+                    <div style="font-size: 0.7em; color: #e74c3c; margin-top: 5px;">📊 Total en Cargos</div>
+                `;
+                
+                document.getElementById('balance').innerHTML = `
+                    ${formatCurrency(-totalExpenses)}
+                    <div style="font-size: 0.7em; color: #e74c3c; margin-top: 5px;">💳 Deuda Generada</div>
+                `;
+                
+            } else {
+                // 🏦 VISTA NORMAL PARA CUENTAS DE DÉBITO
+                document.getElementById('totalIngresos').innerHTML = `
+                    ${formatCurrency(data.summary.totalIncome)}
+                    <div style="font-size: 0.7em; color: #27ae60; margin-top: 5px;">💰 Base de ingresos</div>
+                `;
+                
+                document.getElementById('totalGastos').innerHTML = `
+                    ${formatCurrency(Math.abs(data.summary.totalExpenses))}
+                    <div style="font-size: 0.7em; color: ${expenseRatio > 100 ? '#e74c3c' : '#f39c12'}; margin-top: 5px;">
+                        📊 ${expenseRatio.toFixed(0)}% de tus ingresos
+                    </div>
+                `;
+                
+                document.getElementById('balance').innerHTML = `
+                    ${formatCurrency(data.summary.netBalance)}
+                    <div style="font-size: 0.7em; color: ${data.summary.netBalance < 0 ? '#e74c3c' : '#27ae60'}; margin-top: 5px;">
+                        ${data.summary.netBalance >= 0 ? '📈 Superávit' : '📉 Déficit'} ${Math.abs(balanceRatio).toFixed(0)}%
+                    </div>
+                `;
+            }
             
             document.getElementById('transacciones').innerHTML = `
                 ${data.summary.transactionCount}
                 <div style="font-size: 0.7em; color: #7f8c8d; margin-top: 5px;">
-                    📋 ${(totalExpenses / data.summary.transactionCount).toFixed(0)} promedio
+                    📋 ${totalExpenses > 0 ? (totalExpenses / data.summary.transactionCount).toFixed(0) : 0} promedio
                 </div>
             `;
-            
-            // Indicador de salud financiera
+                        
+           // Indicador de salud financiera (ajustado para tarjetas)
             let healthColor, healthEmoji, healthText, healthAdvice;
-            if (expenseRatio <= 80) {
-                healthColor = '#27ae60';
-                healthEmoji = '🟢';
-                healthText = 'Excelente';
-                healthAdvice = 'Mantén este buen hábito de ahorro';
-            } else if (expenseRatio <= 100) {
-                healthColor = '#f39c12';
-                healthEmoji = '🟡';
-                healthText = 'Precaución';
-                healthAdvice = 'Trata de reducir gastos un 10-15%';
+            
+            if (data.accountType === 'CREDIT_CARD') {
+                // Para tarjetas de crédito, evaluar según el monto de deuda
+                if (totalExpenses <= 5000) {
+                    healthColor = '#27ae60';
+                    healthEmoji = '🟢';
+                    healthText = 'Uso Moderado';
+                    healthAdvice = 'Buen control del gasto en tarjeta';
+                } else if (totalExpenses <= 15000) {
+                    healthColor = '#f39c12';
+                    healthEmoji = '🟡';
+                    healthText = 'Uso Elevado';
+                    healthAdvice = 'Vigila tus gastos en tarjeta de crédito';
+                } else {
+                    healthColor = '#e74c3c';
+                    healthEmoji = '🔴';
+                    healthText = 'Uso Crítico';
+                    healthAdvice = 'Reduce urgentemente el uso de la tarjeta';
+                }
             } else {
-                healthColor = '#e74c3c';
-                healthEmoji = '🔴';
-                healthText = 'Crítico';
-                healthAdvice = 'Urgente: Revisa y recorta gastos inmediatamente';
+                // Lógica normal para cuentas de débito
+                if (expenseRatio <= 80) {
+                    healthColor = '#27ae60';
+                    healthEmoji = '🟢';
+                    healthText = 'Excelente';
+                    healthAdvice = 'Mantén este buen hábito de ahorro';
+                } else if (expenseRatio <= 100) {
+                    healthColor = '#f39c12';
+                    healthEmoji = '🟡';
+                    healthText = 'Precaución';
+                    healthAdvice = 'Trata de reducir gastos un 10-15%';
+                } else {
+                    healthColor = '#e74c3c';
+                    healthEmoji = '🔴';
+                    healthText = 'Crítico';
+                    healthAdvice = 'Urgente: Revisa y recorta gastos inmediatamente';
+                }
             }
 
             document.getElementById('healthIndicator').innerHTML = `
@@ -654,12 +915,17 @@
                     <div style="font-size: 3em;">${healthEmoji}</div>
                     <div style="text-align: left;">
                         <div style="font-size: 1.5em; font-weight: bold; color: ${healthColor};">${healthText}</div>
-                        <div style="color: #7f8c8d; margin: 5px 0;">Gastas ${expenseRatio.toFixed(0)}% de tus ingresos</div>
+                        <div style="color: #7f8c8d; margin: 5px 0;">
+                            ${data.accountType === 'CREDIT_CARD' ? 
+                                `Total en cargos: ${formatCurrency(totalExpenses)}` : 
+                                `Gastas ${expenseRatio.toFixed(0)}% de tus ingresos`
+                            }
+                        </div>
                         <div style="font-size: 0.9em; color: ${healthColor}; font-weight: 500;">${healthAdvice}</div>
                     </div>
                 </div>
             `;
-
+            
             // Crear gráficos
             createCategoryChart(data.categoryBreakdown);
             createWeeklyChart(data.transactions);
