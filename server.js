@@ -7,12 +7,21 @@ const fs = require('fs').promises;
 require('dotenv').config();
 // Función auxiliar para limpiar respuestas de Claude
 function cleanClaudeResponse(responseText) {
-    return responseText
+    // Remover markdown code blocks
+    let cleaned = responseText
         .replace(/```json\s*/g, "")
         .replace(/```\s*/g, "")
-        .replace(/^\s*[\w\s]*?{/, "{")
-        .replace(/}[\w\s]*$/g, "}")
         .trim();
+    
+    // Encontrar el primer { y último } para extraer solo el JSON
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    
+    if (firstBrace !== -1 && lastBrace !== -1 && firstBrace < lastBrace) {
+        cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+    }
+    
+    return cleaned;
 }
 const app = express();
 
