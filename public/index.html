@@ -730,80 +730,182 @@
         }
 
         function createWeeklyChart(transactions) {
-            const ctx = document.getElementById('weeklyChart').getContext('2d');
-            
-            // Días de la semana en español
-            const daysOfWeek = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-            const weeklyData = [0, 0, 0, 0, 0, 0, 0]; // Array para cada día de la semana
-            
-            // Agrupar gastos por día de la semana
-            transactions.forEach(transaction => {
-                if (transaction.amount < 0) { // Solo gastos (valores negativos)
-                    const date = new Date(transaction.date);
-                    const dayOfWeek = date.getDay(); // 0 = Domingo, 1 = Lunes, etc.
-                    weeklyData[dayOfWeek] += Math.abs(transaction.amount);
-                }
-            });
+    const ctx = document.getElementById('weeklyChart').getContext('2d');
+    
+    // Días de la semana en español
+    const daysOfWeek = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    const weeklyData = [0, 0, 0, 0, 0, 0, 0]; // Array para cada día de la semana
+    
+    // Agrupar gastos por día de la semana
+    transactions.forEach(transaction => {
+        if (transaction.amount < 0) { // Solo gastos (valores negativos)
+            const date = new Date(transaction.date);
+            const dayOfWeek = date.getDay(); // 0 = Domingo, 1 = Lunes, etc.
+            weeklyData[dayOfWeek] += Math.abs(transaction.amount);
+        }
+    });
 
-            if (weeklyChart) weeklyChart.destroy();
+    if (weeklyChart) weeklyChart.destroy();
 
-            weeklyChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: daysOfWeek,
-                    datasets: [{
-                        label: 'Gastos por Día',
-                        data: weeklyData,
-                        backgroundColor: [
-                            '#FF6B6B', // Domingo - Rojo
-                            '#4ECDC4', // Lunes - Turquesa
-                            '#45B7D1', // Martes - Azul
-                            '#96CEB4', // Miércoles - Verde claro
-                            '#FFEAA7', // Jueves - Amarillo
-                            '#DDA0DD', // Viernes - Lila
-                            '#98D8C8'  // Sábado - Verde agua
-                        ],
-                        borderWidth: 2,
-                        borderColor: '#fff',
-                        borderRadius: 8,
-                    }]
+    weeklyChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: daysOfWeek,
+            datasets: [{
+                label: 'Gastos por Día',
+                data: weeklyData,
+                backgroundColor: [
+                    '#FF6B6B', // Domingo - Rojo
+                    '#4ECDC4', // Lunes - Turquesa
+                    '#45B7D1', // Martes - Azul
+                    '#96CEB4', // Miércoles - Verde claro
+                    '#FFEAA7', // Jueves - Amarillo
+                    '#DDA0DD', // Viernes - Lila
+                    '#98D8C8'  // Sábado - Verde agua
+                ],
+                borderWidth: 2,
+                borderColor: '#fff',
+                borderRadius: 8,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: false
                 },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: {
-                            display: false
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    const value = context.parsed.y;
-                                    const total = weeklyData.reduce((sum, val) => sum + val, 0);
-                                    const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-                                    return `${context.label}: $${value.toLocaleString()} (${percentage}%)`;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                callback: function(value) {
-                                    return '$' + value.toLocaleString();
-                                }
-                            }
-                        },
-                        x: {
-                            ticks: {
-                                maxRotation: 45,
-                                minRotation: 0
-                            }
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const value = context.parsed.y;
+                            const total = weeklyData.reduce((sum, val) => sum + val, 0);
+                            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                            return `${context.label}: $${value.toLocaleString()} (${percentage}%)`;
                         }
                     }
                 }
-            });
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value.toLocaleString();
+                        }
+                    }
+                },
+                x: {
+                    ticks: {
+                        maxRotation: 45,
+                        minRotation: 0
+                    }
+                }
+            }
         }
+    });
+
+    // ✨ NUEVOS INSIGHTS PARA EL GRÁFICO SEMANAL ✨
+    generateWeeklyInsights(weeklyData, daysOfWeek);
+}
+
+// Nueva función para generar insights del gráfico semanal
+function generateWeeklyInsights(weeklyData, daysOfWeek) {
+    // Calcular métricas
+    const totalWeeklyExpenses = weeklyData.reduce((sum, amount) => sum + amount, 0);
+    const daysWithExpenses = weeklyData.filter(amount => amount > 0).length;
+    const dailyAverage = daysWithExpenses > 0 ? totalWeeklyExpenses / daysWithExpenses : 0;
+    
+    // Encontrar día con mayor y menor gasto
+    const maxExpenseIndex = weeklyData.indexOf(Math.max(...weeklyData));
+    const maxExpenseDay = daysOfWeek[maxExpenseIndex];
+    const maxExpenseAmount = weeklyData[maxExpenseIndex];
+    
+    // Para el día con menor gasto, excluir días sin gastos (0)
+    const nonZeroExpenses = weeklyData.map((amount, index) => ({ amount, index }))
+                                     .filter(item => item.amount > 0);
+    let minExpenseDay = '';
+    let minExpenseAmount = 0;
+    
+    if (nonZeroExpenses.length > 0) {
+        const minExpense = nonZeroExpenses.reduce((min, current) => 
+            current.amount < min.amount ? current : min
+        );
+        minExpenseDay = daysOfWeek[minExpense.index];
+        minExpenseAmount = minExpense.amount;
+    }
+    
+    // Calcular diferencia entre día más caro y más barato
+    const expenseDifference = maxExpenseAmount - minExpenseAmount;
+    
+    // Determinar patrón: entre semana vs fin de semana
+    const weekdayExpenses = weeklyData.slice(1, 6).reduce((sum, amount) => sum + amount, 0); // Lunes a Viernes
+    const weekendExpenses = weeklyData[0] + weeklyData[6]; // Domingo + Sábado
+    const weekdayAverage = weekdayExpenses / 5;
+    const weekendAverage = weekendExpenses / 2;
+    
+    let spendingPattern = '';
+    let patternEmoji = '';
+    if (weekendAverage > weekdayAverage * 1.2) {
+        spendingPattern = 'Gastas más los fines de semana';
+        patternEmoji = '🎉';
+    } else if (weekdayAverage > weekendAverage * 1.2) {
+        spendingPattern = 'Gastas más entre semana';
+        patternEmoji = '💼';
+    } else {
+        spendingPattern = 'Gastos equilibrados toda la semana';
+        patternEmoji = '⚖️';
+    }
+    
+    // Generar HTML con los insights
+    const insightsHTML = `
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 15px;">
+            <div style="background: #e8f5e8; padding: 12px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 1.1em; font-weight: bold; color: #27ae60;">💰 ${formatCurrency(dailyAverage)}</div>
+                <div style="font-size: 0.85em; color: #2d5a2d;">Gasto diario promedio</div>
+            </div>
+            
+            <div style="background: #ffe8e8; padding: 12px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 1.1em; font-weight: bold; color: #e74c3c;">📈 ${maxExpenseDay}</div>
+                <div style="font-size: 0.85em; color: #a94442;">${formatCurrency(maxExpenseAmount)} - Día más caro</div>
+            </div>
+            
+            ${minExpenseAmount > 0 ? `
+            <div style="background: #e8f4fd; padding: 12px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 1.1em; font-weight: bold; color: #3498db;">📉 ${minExpenseDay}</div>
+                <div style="font-size: 0.85em; color: #2980b9;">${formatCurrency(minExpenseAmount)} - Día más barato</div>
+            </div>
+            ` : ''}
+            
+            <div style="background: #fff3e0; padding: 12px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 1.1em; font-weight: bold; color: #f39c12;">${patternEmoji} ${spendingPattern}</div>
+                <div style="font-size: 0.85em; color: #e67e22;">
+                    Entre semana: ${formatCurrency(weekdayAverage)}/día<br>
+                    Fin de semana: ${formatCurrency(weekendAverage)}/día
+                </div>
+            </div>
+        </div>
+        
+        ${expenseDifference > 0 && minExpenseAmount > 0 ? `
+        <div style="background: #f8f9fa; padding: 10px; border-radius: 8px; margin-top: 10px; text-align: center; border-left: 4px solid #6c757d;">
+            <small style="color: #495057;">
+                💡 <strong>Diferencia máxima:</strong> ${formatCurrency(expenseDifference)} entre tu día más caro (${maxExpenseDay}) y más barato (${minExpenseDay})
+            </small>
+        </div>
+        ` : ''}
+    `;
+    
+    // Insertar los insights en el DOM
+    const weeklyContainer = document.querySelector('#weeklyChart').closest('.chart-container');
+    let insightsDiv = weeklyContainer.querySelector('#weeklyInsights');
+    
+    if (!insightsDiv) {
+        insightsDiv = document.createElement('div');
+        insightsDiv.id = 'weeklyInsights';
+        weeklyContainer.appendChild(insightsDiv);
+    }
+    
+    insightsDiv.innerHTML = insightsHTML;
+}
         function displayTransactionsTable(transactions) {
             const tbody = document.getElementById('transactionsBody');
             tbody.innerHTML = '';
