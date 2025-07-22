@@ -449,7 +449,6 @@
                 reader.readAsDataURL(file);
             });
         }
-
         // Configuración de API  
         const API_BASE_URL = window.location.origin;
 
@@ -580,7 +579,6 @@
                 }
             };
         }
-
         function displayResults(data) {
             processedData = data;
             
@@ -669,7 +667,6 @@
             // Mostrar tabla de transacciones
             displayTransactionsTable(data.transactions);
         }
-
         function createCategoryChart(categoryData) {
             const ctx = document.getElementById('categoryChart').getContext('2d');
             
@@ -807,7 +804,104 @@
                 }
             });
         }
-
         function displayTransactionsTable(transactions) {
             const tbody = document.getElementById('transactionsBody');
             tbody.innerHTML = '';
+
+            // Ordenar transacciones: gastos de mayor a menor (valores negativos más grandes primero)
+            const sortedTransactions = [...transactions].sort((a, b) => {
+                // Si ambos son gastos (negativos), ordenar por valor absoluto descendente
+                if (a.amount < 0 && b.amount < 0) {
+                    return Math.abs(b.amount) - Math.abs(a.amount);
+                }
+                // Si uno es gasto y otro ingreso, gastos primero
+                if (a.amount < 0 && b.amount >= 0) return -1;
+                if (a.amount >= 0 && b.amount < 0) return 1;
+                // Si ambos son ingresos, ordenar por valor descendente
+                return b.amount - a.amount;
+            });
+
+            sortedTransactions.slice(0, 20).forEach(transaction => { // Mostrar solo las primeras 20
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>${new Date(transaction.date).toLocaleDateString('es-ES')}</td>
+                    <td>${transaction.description}</td>
+                    <td><span class="category-tag" style="background-color: ${categoryColors[transaction.category] || categoryColors['Otros']}20; color: ${categoryColors[transaction.category] || categoryColors['Otros']}">${transaction.category}</span></td>
+                    <td style="color: ${transaction.amount < 0 ? '#e74c3c' : '#27ae60'}; font-weight: bold;">
+                        ${formatCurrency(transaction.amount)}
+                    </td>
+                `;
+            });
+
+            if (sortedTransactions.length > 20) {
+                const row = tbody.insertRow();
+                row.innerHTML = `<td colspan="4" style="text-align: center; color: #666; font-style: italic;">... y ${sortedTransactions.length - 20} transacciones más</td>`;
+            }
+        }
+
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('es-MX', {
+                style: 'currency',
+                currency: 'MXN'
+            }).format(amount);
+        }
+
+        function showProcessing() {
+            document.getElementById('uploadSection').style.display = 'none';
+            document.getElementById('processing').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('errorMessage').innerHTML = '';
+        }
+
+        function showError(message) {
+            document.getElementById('processing').style.display = 'none';
+            document.getElementById('errorMessage').innerHTML = `
+                <div class="error-message">
+                    ❌ ${message}
+                </div>
+            `;
+            
+            // Reset file input
+            document.getElementById('fileInput').value = '';
+        }
+
+        // Función para reiniciar la aplicación
+        function resetApp() {
+            document.getElementById('uploadSection').style.display = 'block';
+            document.getElementById('processing').style.display = 'none';
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('errorMessage').innerHTML = '';
+            document.getElementById('fileInput').value = '';
+            
+            if (categoryChart) categoryChart.destroy();
+            if (weeklyChart) weeklyChart.destroy();
+        }
+
+        // Agregar botón de reset (opcional)
+        document.addEventListener('DOMContentLoaded', function() {
+            const header = document.querySelector('.header');
+            const resetBtn = document.createElement('button');
+            resetBtn.innerHTML = '🔄 Analizar Otro Archivo';
+            resetBtn.style.cssText = `
+                background: rgba(255,255,255,0.2);
+                color: white;
+                border: 1px solid rgba(255,255,255,0.3);
+                padding: 10px 20px;
+                border-radius: 25px;
+                cursor: pointer;
+                margin-top: 15px;
+                display: none;
+            `;
+            resetBtn.onclick = resetApp;
+            header.appendChild(resetBtn);
+            
+            // Mostrar botón solo cuando hay resultados
+            const observer = new MutationObserver(function() {
+                const resultsVisible = document.getElementById('results').style.display === 'block';
+                resetBtn.style.display = resultsVisible ? 'inline-block' : 'none';
+            });
+            observer.observe(document.getElementById('results'), { attributes: true });
+        });
+    </script>
+</body>
+</html>
