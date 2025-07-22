@@ -107,66 +107,170 @@ app.post('/api/analyze-pdf', upload.single('pdf'), async (req, res) => {
     }
 });
 
-// Función para llamar a Claude API
+// Función mejorada para llamar a Claude API con detección de tipo de cuenta
 async function analyzeWithClaudeAPI(base64Data) {
     if (!process.env.CLAUDE_API_KEY) {
         throw new Error('CLAUDE_API_KEY no está configurada en las variables de entorno');
     }
-const prompt = `
-ANALIZA este estado de cuenta bancario PDF mexicano y extrae TODAS las transacciones.
 
-INSTRUCCIONES CRITICAS:
-1. Si NO puedes leer claramente las transacciones, responde con "confidence": 30
-2. Si el PDF esta borroso, mal escaneado o ilegible, responde con "confidence": 40
-3. Solo usa "confidence" mayor a 70 si puedes leer CLARAMENTE todas las transacciones
+    console.log('=== INICIANDO ANALISIS CON CLAUDE ===');
+    console.log('Tamaño del PDF (base64):', base64Data.length);
+    
+    try {
+        console.log('Paso 1: Detectando tipo de cuenta...');
+        
+        // PASO 1: Detectar tipo de cuenta primero
+        const detectionPrompt = `
+Analiza este PDF de estado de cuenta y detecta:
 
-PARA BANCOS MEXICANOS (Santander, BBVA, Banamex, HSBC):
-- Busca tablas con: Fecha, Descripcion, Monto
-- Extrae TODOS los movimientos (+/-)
-- Categoriza en: Alimentacion, Transporte, Vivienda, Entretenimiento, Salud, Educacion, Compras, Servicios, Transferencias, Otros
+1. TIPO DE CUENTA:
+   - Si es TARJETA DE CRÉDITO busca: "tarjeta de crédito", "pago mínimo", "fecha límite", "cargos regulares", "fecha de corte"
+   - Si es CUENTA DE DÉBITO/CHEQUES busca: "cuenta de cheques", "saldo inicial", "saldo final", "retiros"
 
-PATRONES ESPECIFICOS:
-- AMAZON, MERCADOLIBRE = Compras  
-- UBER, GASOLINA, PEMEX = Transporte
-- OXXO, WALMART, SORIANA = Alimentacion
-- CFE, TELMEX, IZZI = Servicios
+2. BANCO:
+   - Santander, BBVA, Banamex, Banorte, HSBC, Nu, etc.
+
+Responde SOLO con este JSON:
+{
+  "accountType": "CREDIT_CARD" o "DEBIT_ACCOUNT",
+  "bankName": "SANTANDER",
+  "confidence": 85
+}
+`;
+
+        const detectionResponse = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "x-api-key": process.env.CLAUDE_API_KEY,
+                "anthropic-version": "2023-06-01"
+            },
+            body: JSON.stringify({
+                model: "claude-3-5-sonnet-20241022",
+                max_tokens: 1000,
+                messages: [{
+                    role: "user",
+                    content: [{
+                        type: "document",
+                        source: {
+                            type: "base64",
+                            media_type: "application/pdf",
+                            data: base64Data,
+                        },
+                    }, {
+                        type: "text",
+                        text: detectionPrompt,
+                    }],
+                }],
+            })
+        });
+
+        if (!detectionResponse.ok) {
+            const errorData = await detectionResponse.text();
+            console.error('Claude API Error en detección:', detectionResponse.status, errorData);
+            throw new Error(`Claude API Error: ${detectionResponse.status} - ${errorData}`);
+        }
+
+        const detectionData = await detectionResponse.json();
+        let detectionText = detectionData.content[0].text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+        const detection = JSON.parse(detectionText);
+        
+        console.log('🔍 Tipo detectado:', detection.accountType, 'Banco:', detection.bankName);
+
+        // PASO 2: Crear prompt específico según el tipo de cuenta
+        let analysisPrompt;
+        
+        if (detection.accountType === 'CREDIT_CARD') {
+            console.log('💳 Procesando como TARJETA DE CRÉDITO...');
+            analysisPrompt = `
+IMPORTANTE: Este es un estado de cuenta de TARJETA DE CRÉDITO de ${detection.bankName}.
+
+REGLAS ESPECÍFICAS PARA TARJETAS DE CRÉDITO:
+1. CARGOS/COMPRAS = GASTOS del usuario (usar amount NEGATIVO)
+2. ABONOS/PAGOS = Pagos a la tarjeta (NO incluir como transacciones de gasto)
+3. SOLO procesar la sección de "CARGOS" o "COMPRAS REGULARES"
+4. IGNORAR completamente la sección de "ABONOS" o "PAGOS"
+
+FECHAS SANTANDER: Formato "DD-MMM-YYYY" (ej: "15-JUN-2025")
+- 15-ENE-2025 = 2025-01-15
+- 28-FEB-2025 = 2025-02-28
+- 12-MAR-2025 = 2025-03-12
+
+BUSCAR SECCIÓN: "CARGOS, ABONOS Y COMPRAS REGULARES" o similar
+FORMATO TÍPICO: DD-MMM-YYYY DD-MMM-YYYY DESCRIPCION $MONTO
+
+CATEGORIZACIÓN:
+- AMAZON, MERCADOLIBRE, LIVERPOOL = Compras
+- UBER, GASOLINA, PEMEX, GO TAXI = Transporte  
+- OXXO, WALMART, SORIANA = Alimentación
+- CFE, TELMEX, IZZI, LUZ = Servicios
 - NETFLIX, SPOTIFY = Entretenimiento
-- AXA, SEGUROS = Servicios
-- TRANSFERENCIA, PAGO INTERBANCARIO = Transferencias
+- FARMACIA, DOCTOR = Salud
+- RENTA, HIPOTECA = Vivienda
 
-Responde UNICAMENTE con JSON valido:
+Responde con JSON válido:
 {
   "confidence": 85,
-  "bankDetected": "Santander Mexico",
+  "bankDetected": "${detection.bankName}",
+  "accountType": "CREDIT_CARD",
   "transactions": [
     {
-      "date": "2024-12-11",
-      "description": "AMAZON MX",
+      "date": "2025-06-15",
+      "description": "AMAZON MX COMPRA",
       "category": "Compras",
-      "amount": -1180.00,
+      "amount": -1200.50,
       "type": "gasto"
     }
   ],
   "summary": {
-    "totalIncome": 6966.79,
-    "totalExpenses": -23511.10,
-    "netBalance": -16544.31,
-    "transactionCount": 35,
-    "period": "Diciembre 2024"
+    "totalIncome": 0,
+    "totalExpenses": -8632.36,
+    "netBalance": -8632.36,
+    "transactionCount": 15,
+    "period": "Junio 2025"
   },
   "categoryBreakdown": {
-    "Compras": -5000,
-    "Servicios": -4000
+    "Compras": -1200.50,
+    "Servicios": -450.00
   }
 }
+`;
+        } else {
+            console.log('🏦 Procesando como CUENTA DE DÉBITO...');
+            analysisPrompt = `
+Este es un estado de cuenta de CUENTA DE DÉBITO/CHEQUES de ${detection.bankName}.
 
-IMPORTANTE: Si no puedes extraer datos confiables, usa confidence menor a 50.
-NO INVENTES DATOS. Solo JSON valido, sin texto adicional.
-`;    
-    console.log('=== INICIANDO ANALISIS CON CLAUDE ===');
-    console.log('Tamaño del PDF (base64):', base64Data.length);
-    try {
-        console.log('Llamando a Claude API...');
+PROCESAR NORMALMENTE:
+- Ingresos: depósitos, transferencias recibidas, nóminas (amount POSITIVO)
+- Gastos: retiros, pagos, compras (amount NEGATIVO)
+
+CATEGORIZACIÓN:
+- AMAZON, MERCADOLIBRE = Compras
+- UBER, GASOLINA, PEMEX = Transporte
+- OXXO, WALMART, SORIANA = Alimentación
+- CFE, TELMEX, IZZI = Servicios
+- NETFLIX, SPOTIFY = Entretenimiento
+
+Responde con JSON válido:
+{
+  "confidence": 85,
+  "bankDetected": "${detection.bankName}",
+  "accountType": "DEBIT_ACCOUNT",
+  "transactions": [...],
+  "summary": {
+    "totalIncome": 5000.00,
+    "totalExpenses": -3500.00,
+    "netBalance": 1500.00,
+    "transactionCount": 25,
+    "period": "Junio 2025"
+  },
+  "categoryBreakdown": {...}
+}
+`;
+        }
+
+        // PASO 3: Análisis completo con prompt especializado
+        console.log('Paso 2: Analizando transacciones...');
         
         const response = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
@@ -175,34 +279,29 @@ NO INVENTES DATOS. Solo JSON valido, sin texto adicional.
                 "x-api-key": process.env.CLAUDE_API_KEY,
                 "anthropic-version": "2023-06-01"
             },
-            
             body: JSON.stringify({
                 model: "claude-3-5-sonnet-20241022",
                 max_tokens: 4000,
-                messages: [
-                    {
-                        role: "user",
-                        content: [
-                            {
-                                type: "document",
-                                source: {
-                                    type: "base64",
-                                    media_type: "application/pdf",
-                                    data: base64Data,
-                                },
-                            },
-                            {
-                                type: "text",
-                                text: prompt,
-                            },
-                        ],
-                    },
-                ],
+                messages: [{
+                    role: "user",
+                    content: [{
+                        type: "document",
+                        source: {
+                            type: "base64",
+                            media_type: "application/pdf",
+                            data: base64Data,
+                        },
+                    }, {
+                        type: "text",
+                        text: analysisPrompt,
+                    }],
+                }],
             })
         });
-console.log('Claude API response status:', response.status);
 
-            if (!response.ok) {
+        console.log('Claude API response status:', response.status);
+
+        if (!response.ok) {
             const errorData = await response.text();
             console.error('Claude API Error:', response.status, errorData);
             throw new Error(`Claude API Error: ${response.status} - ${errorData}`);
@@ -210,28 +309,35 @@ console.log('Claude API response status:', response.status);
 
         const data = await response.json();
         console.log('Claude API respuesta exitosa');
+        
         if (!data.content || !data.content[0] || !data.content[0].text) {
             throw new Error('Respuesta de Claude API inválida');
         }
 
         let responseText = data.content[0].text;
         console.log('Respuesta de Claude (primeros 500 chars):', responseText.substring(0, 500));
-        console.log('Respuesta de Claude recibida, parseando...');
         
         // Limpiar respuesta de markdown si existe
         responseText = responseText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
         
         // Validar que sea JSON válido
         const parsedData = JSON.parse(responseText);
-        console.log('Confianza detectada:', parsedData.confidence);
-        console.log('Transacciones encontradas:', parsedData.transactions?.length || 0);
+        
+        // Asegurar que tenga la información de detección
+        parsedData.accountType = detection.accountType;
+        parsedData.bankDetected = detection.bankName;
+        
+        console.log('✅ Análisis completado:');
+        console.log('  - Tipo:', parsedData.accountType);
+        console.log('  - Banco:', parsedData.bankDetected);
+        console.log('  - Confianza:', parsedData.confidence);
+        console.log('  - Transacciones:', parsedData.transactions?.length || 0);
         
         // Validar estructura mínima requerida
         if (!parsedData.transactions || !parsedData.summary) {
             throw new Error('Estructura de datos incompleta en la respuesta');
         }
         
-        console.log('Análisis completado:', parsedData.summary.transactionCount, 'transacciones encontradas');
         return parsedData;
 
     } catch (error) {
@@ -241,7 +347,6 @@ console.log('Claude API response status:', response.status);
         throw error;
     }
 }
-
 // Endpoint de salud
 app.get('/health', (req, res) => {
     res.json({ 
