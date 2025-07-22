@@ -5,7 +5,15 @@ const cors = require('cors');
 const multer = require('multer');
 const fs = require('fs').promises;
 require('dotenv').config();
-
+// Función auxiliar para limpiar respuestas de Claude
+function cleanClaudeResponse(responseText) {
+    return responseText
+        .replace(/```json\s*/g, "")
+        .replace(/```\s*/g, "")
+        .replace(/^\s*[\w\s]*?{/, "{")
+        .replace(/}[\w\s]*$/g, "}")
+        .trim();
+}
 const app = express();
 
 const PORT = process.env.PORT || 3000;
@@ -173,7 +181,9 @@ Responde SOLO con este JSON:
 
         const detectionData = await detectionResponse.json();
         let detectionText = detectionData.content[0].text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
-        const detection = JSON.parse(detectionText);
+        // Limpiar más agresivamente la respuesta de Claude
+detectionText = cleanClaudeResponse(detectionData.content[0].text);
+console.log('Texto de detección limpio:', detectionText);const detection = JSON.parse(detectionText);
         
         console.log('🔍 Tipo detectado:', detection.accountType, 'Banco:', detection.bankName);
 
@@ -318,11 +328,13 @@ Responde con JSON válido:
         console.log('Respuesta de Claude (primeros 500 chars):', responseText.substring(0, 500));
         
         // Limpiar respuesta de markdown si existe
-        responseText = responseText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+       responseText = cleanClaudeResponse(responseText);
         
-        // Validar que sea JSON válido
-        const parsedData = JSON.parse(responseText);
+        // Limpiar respuesta del análisis principal
+responseText = cleanClaudeResponse(data.content[0].text);
+console.log('Respuesta principal limpia (primeros 200 chars):', responseText.substring(0, 200));
         
+        const parsedData = JSON.parse(responseText);        
         // Asegurar que tenga la información de detección
         parsedData.accountType = detection.accountType;
         parsedData.bankDetected = detection.bankName;
