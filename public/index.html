@@ -344,7 +344,7 @@
                 'mercado', 'abarrotes', 'tienda', 'grocery', 
                 'oxxo', 'seven', '7-eleven', 
                 'farmacia guadalajara', 'benavides'
-            ],            ],
+            ],           
             'Restaurantes': [
                 'restaurante', 'restaurant', 'comida', 'food', 'burger', 'pizza', 'taco', 
                 'café', 'coffee', 'bar', 'mc', 'kfc', 'subway', 'dominos', 
@@ -933,7 +933,7 @@
             // Crear gráficos
             createCategoryChart(data.categoryBreakdown);
             createWeeklyChart(data.transactions);
-// Función para agrupar transacciones por proveedor
+            // Función para agrupar transacciones por proveedor
         function groupByProvider(transactions) {
             const providers = {};
             
@@ -1304,13 +1304,7 @@ function generateWeeklyInsights(weeklyData, daysOfWeek) {
                 separatorRow.innerHTML = '<td colspan="4" style="height: 10px; border: none;"></td>';
             });
         }
-            if (sortedTransactions.length > 20) {
-                const row = tbody.insertRow();
-                row.innerHTML = `<td colspan="4" style="text-align: center; color: #666; font-style: italic;">... y ${sortedTransactions.length - 20} transacciones más</td>`;
-            }
-        }
-
-        function formatCurrency(amount) {
+            function formatCurrency(amount) {
             return new Intl.NumberFormat('es-MX', {
                 style: 'currency',
                 currency: 'MXN'
