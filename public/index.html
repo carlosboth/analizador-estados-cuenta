@@ -332,16 +332,19 @@
 
         // Categorías para análisis de transacciones
         const categories = {
+            'Supermercado': [
+                'supercenter', 'supermercado', 'walmart', 'soriana', 'chedraui', 'bodega aurrera'
+            ],
             'Ingresos': [
                 'spei recibido', 'deposito', 'depósito', 'transferencia recibida', 
                 'pago de nomina', 'nómina', 'salario', 'sueldo', 'abono', 'intereses', 
                 'rendimiento', 'cashback', 'reembolso', 'devolución'
             ],
-            'Alimentación': [
-                'supermercado', 'mercado', 'abarrotes', 'tienda', 'grocery', 
-                'soriana', 'walmart', 'chedraui', 'oxxo', 'seven', '7-eleven', 
-                'farmacia guadalajara', 'benavides', 'bodega aurrera'
-            ],
+           'Alimentación': [
+                'mercado', 'abarrotes', 'tienda', 'grocery', 
+                'oxxo', 'seven', '7-eleven', 
+                'farmacia guadalajara', 'benavides'
+            ],            ],
             'Restaurantes': [
                 'restaurante', 'restaurant', 'comida', 'food', 'burger', 'pizza', 'taco', 
                 'café', 'coffee', 'bar', 'mc', 'kfc', 'subway', 'dominos', 
@@ -361,7 +364,7 @@
             ],
             'Salud': [
                 'farmacia', 'hospital', 'doctor', 'medicina', 'dental', 'laboratorio', 
-                'clinica', 'seguro', 'similares', 'issste', 'imss'
+                'clinica', 'seguro', 'similares', 'issste', 'imss', 'sfg inb cr'
             ],
             'Compras': [
                 'amazon', 'mercadolibre', 'liverpool', 'palacio', 'sears', 'tienda', 
@@ -517,6 +520,7 @@
 
     // Colores para categorías
         const categoryColors = {
+            'Supermercado': '#16A085',
             'Alimentación': '#E74C3C',    // Rojo vibrante
             'Transporte': '#3498DB',      // Azul intenso  
             'Vivienda': '#2ECC71',        // Verde intenso
@@ -929,7 +933,72 @@
             // Crear gráficos
             createCategoryChart(data.categoryBreakdown);
             createWeeklyChart(data.transactions);
+// Función para agrupar transacciones por proveedor
+        function groupByProvider(transactions) {
+            const providers = {};
+            
+            transactions.forEach(transaction => {
+                if (transaction.amount >= 0) return; // Solo gastos
+                
+                // Extraer nombre del proveedor
+                let provider = cleanProviderName(transaction.description);
+                
+                if (!providers[provider]) {
+                    providers[provider] = {
+                        name: provider,
+                        totalAmount: 0,
+                        transactionCount: 0,
+                        transactions: []
+                    };
+                }
+                
+                providers[provider].totalAmount += Math.abs(transaction.amount);
+                providers[provider].transactionCount++;
+                providers[provider].transactions.push(transaction);
+            });
+            
+            // Ordenar por total gastado (mayor a menor)
+            return Object.values(providers)
+                .sort((a, b) => b.totalAmount - a.totalAmount);
+        }
 
+        // Función para limpiar nombres de proveedores
+        function cleanProviderName(description) {
+            const desc = description.toUpperCase();
+            
+            // Mapeo de patrones comunes
+            const providerPatterns = {
+                'SUPERMERCADO ALTABRISA': /SUPERCENTER ALTABRISA/,
+                'SEGURO SALUD': /SFG INB CR/,
+                'AMAZON': /AMAZON/,
+                'UBER': /UBER|GO TAXI/,
+                'NETFLIX': /NETFLIX/,
+                'SPOTIFY': /SPOTIFY/,
+                'OXXO': /OXXO/,
+                'WALMART': /WALMART/,
+                'LIVERPOOL': /LIVERPOOL/,
+                'FARMACIAS SIMILARES': /FARMACIAS SIMILARES|SIMILARES/,
+                'CFE': /CFE/,
+                'TELMEX': /TELMEX/,
+                'TELCEL': /TELCEL/,
+                'PEMEX': /PEMEX/,
+                'CINÉPOLIS': /CINEPOLIS/,
+                'APPLE': /APPLE/,
+                'ANYTIME FITNESS': /ANYTIME FITNESS/,
+                'DAISO': /DAISO/
+            };
+            
+            // Buscar coincidencias
+            for (const [cleanName, pattern] of Object.entries(providerPatterns)) {
+                if (pattern.test(desc)) {
+                    return cleanName;
+                }
+            }
+            
+            // Si no encuentra, usar primeras 2 palabras
+            const words = desc.split(' ').slice(0, 2).join(' ');
+            return words || 'OTROS';
+        }
             // Mostrar tabla de transacciones
             displayTransactionsTable(data.transactions);
         }
@@ -1173,34 +1242,68 @@ function generateWeeklyInsights(weeklyData, daysOfWeek) {
     insightsDiv.innerHTML = insightsHTML;
 }
         function displayTransactionsTable(transactions) {
+            const providers = groupByProvider(transactions);
             const tbody = document.getElementById('transactionsBody');
             tbody.innerHTML = '';
 
-            // Ordenar transacciones: gastos de mayor a menor (valores negativos más grandes primero)
-            const sortedTransactions = [...transactions].sort((a, b) => {
-                // Si ambos son gastos (negativos), ordenar por valor absoluto descendente
-                if (a.amount < 0 && b.amount < 0) {
-                    return Math.abs(b.amount) - Math.abs(a.amount);
-                }
-                // Si uno es gasto y otro ingreso, gastos primero
-                if (a.amount < 0 && b.amount >= 0) return -1;
-                if (a.amount >= 0 && b.amount < 0) return 1;
-                // Si ambos son ingresos, ordenar por valor descendente
-                return b.amount - a.amount;
-            });
-
-            sortedTransactions.slice(0, 20).forEach(transaction => { // Mostrar solo las primeras 20
-                const row = tbody.insertRow();
-                row.innerHTML = `
-                    <td>${new Date(transaction.date).toLocaleDateString('es-ES')}</td>
-                    <td>${transaction.description}</td>
-                    <td><span class="category-tag" style="background-color: ${categoryColors[transaction.category] || categoryColors['Otros']}20; color: ${categoryColors[transaction.category] || categoryColors['Otros']}">${transaction.category}</span></td>
-                    <td style="color: ${transaction.amount < 0 ? '#e74c3c' : '#27ae60'}; font-weight: bold;">
-                        ${formatCurrency(transaction.amount)}
+            providers.slice(0, 10).forEach(provider => { // Mostrar top 10 proveedores
+                // Fila del proveedor (header)
+                const headerRow = tbody.insertRow();
+                headerRow.style.backgroundColor = '#f8f9fa';
+                headerRow.style.fontWeight = 'bold';
+                headerRow.innerHTML = `
+                    <td colspan="2">
+                        <span style="font-size: 1.1em;">🏪 ${provider.name}</span>
+                        <small style="color: #666; margin-left: 10px;">
+                            ${provider.transactionCount} transacción${provider.transactionCount > 1 ? 'es' : ''}
+                        </small>
+                    </td>
+                    <td></td>
+                    <td style="color: #e74c3c; font-weight: bold;">
+                        ${formatCurrency(-provider.totalAmount)}
                     </td>
                 `;
+                
+                // Mostrar hasta 3 transacciones del proveedor
+                const transactionsToShow = provider.transactions
+                    .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+                    .slice(0, 3);
+                    
+                transactionsToShow.forEach(transaction => {
+                    const row = tbody.insertRow();
+                    row.innerHTML = `
+                        <td style="padding-left: 20px; color: #666;">
+                            ${new Date(transaction.date).toLocaleDateString('es-ES')}
+                        </td>
+                        <td style="color: #666; font-size: 0.9em;">
+                            ${transaction.description}
+                        </td>
+                        <td>
+                            <span class="category-tag" style="background-color: ${categoryColors[transaction.category] || '#BDC3C7'}20; color: ${categoryColors[transaction.category] || '#BDC3C7'}">
+                                ${transaction.category}
+                            </span>
+                        </td>
+                        <td style="color: #e74c3c;">
+                            ${formatCurrency(transaction.amount)}
+                        </td>
+                    `;
+                });
+                
+                // Si hay más transacciones, mostrar resumen
+                if (provider.transactions.length > 3) {
+                    const moreRow = tbody.insertRow();
+                    moreRow.innerHTML = `
+                        <td colspan="4" style="text-align: center; color: #666; font-style: italic; padding: 5px;">
+                            ... y ${provider.transactions.length - 3} transacciones más
+                        </td>
+                    `;
+                }
+                
+                // Fila separadora
+                const separatorRow = tbody.insertRow();
+                separatorRow.innerHTML = '<td colspan="4" style="height: 10px; border: none;"></td>';
             });
-
+        }
             if (sortedTransactions.length > 20) {
                 const row = tbody.insertRow();
                 row.innerHTML = `<td colspan="4" style="text-align: center; color: #666; font-style: italic;">... y ${sortedTransactions.length - 20} transacciones más</td>`;
