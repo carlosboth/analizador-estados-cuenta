@@ -521,7 +521,7 @@
     // Colores para categorías
         const categoryColors = {
             'Supermercado': '#16A085',
-            'Alimentación': '#E74C3C',    // Rojo vibrante
+            'Alimentación': '#F1C40F',    // Amarillo vibrante
             'Transporte': '#3498DB',      // Azul intenso  
             'Vivienda': '#2ECC71',        // Verde intenso
             'Entretenimiento': '#9B59B6', // Púrpura intenso
@@ -782,6 +782,73 @@
                 pdfText: "Estado de cuenta demo"
             };
         }
+        
+        function groupByProvider(transactions) {
+            const providers = {};
+            
+            transactions.forEach(transaction => {
+                if (transaction.amount >= 0) return; // Solo gastos
+                
+                // Extraer nombre del proveedor
+                let provider = cleanProviderName(transaction.description);
+                
+                if (!providers[provider]) {
+                    providers[provider] = {
+                        name: provider,
+                        totalAmount: 0,
+                        transactionCount: 0,
+                        transactions: []
+                    };
+                }
+                
+                providers[provider].totalAmount += Math.abs(transaction.amount);
+                providers[provider].transactionCount++;
+                providers[provider].transactions.push(transaction);
+            });
+            
+            // Ordenar por total gastado (mayor a menor)
+            return Object.values(providers)
+                .sort((a, b) => b.totalAmount - a.totalAmount);
+        }
+
+        // Función para limpiar nombres de proveedores
+        function cleanProviderName(description) {
+            const desc = description.toUpperCase();
+            
+            // Mapeo de patrones comunes
+            const providerPatterns = {
+                'SUPERMERCADO ALTABRISA': /SUPERCENTER ALTABRISA/,
+                'SEGURO SALUD': /SFG INB CR/,
+                'AMAZON': /AMAZON/,
+                'UBER': /UBER|GO TAXI/,
+                'NETFLIX': /NETFLIX/,
+                'SPOTIFY': /SPOTIFY/,
+                'OXXO': /OXXO/,
+                'WALMART': /WALMART/,
+                'LIVERPOOL': /LIVERPOOL/,
+                'FARMACIAS SIMILARES': /FARMACIAS SIMILARES|SIMILARES/,
+                'CFE': /CFE/,
+                'TELMEX': /TELMEX/,
+                'TELCEL': /TELCEL/,
+                'PEMEX': /PEMEX/,
+                'CINÉPOLIS': /CINEPOLIS/,
+                'APPLE': /APPLE/,
+                'ANYTIME FITNESS': /ANYTIME FITNESS/,
+                'DAISO': /DAISO/
+            };
+            
+            // Buscar coincidencias
+            for (const [cleanName, pattern] of Object.entries(providerPatterns)) {
+                if (pattern.test(desc)) {
+                    return cleanName;
+                }
+            }
+            
+            // Si no encuentra, usar primeras 2 palabras
+            const words = desc.split(' ').slice(0, 2).join(' ');
+            return words || 'OTROS';
+        }
+        
         function displayResults(data) {
             processedData = data;
             
@@ -933,72 +1000,7 @@
             // Crear gráficos
             createCategoryChart(data.categoryBreakdown);
             createWeeklyChart(data.transactions);
-            // Función para agrupar transacciones por proveedor
-        function groupByProvider(transactions) {
-            const providers = {};
-            
-            transactions.forEach(transaction => {
-                if (transaction.amount >= 0) return; // Solo gastos
-                
-                // Extraer nombre del proveedor
-                let provider = cleanProviderName(transaction.description);
-                
-                if (!providers[provider]) {
-                    providers[provider] = {
-                        name: provider,
-                        totalAmount: 0,
-                        transactionCount: 0,
-                        transactions: []
-                    };
-                }
-                
-                providers[provider].totalAmount += Math.abs(transaction.amount);
-                providers[provider].transactionCount++;
-                providers[provider].transactions.push(transaction);
-            });
-            
-            // Ordenar por total gastado (mayor a menor)
-            return Object.values(providers)
-                .sort((a, b) => b.totalAmount - a.totalAmount);
-        }
-
-        // Función para limpiar nombres de proveedores
-        function cleanProviderName(description) {
-            const desc = description.toUpperCase();
-            
-            // Mapeo de patrones comunes
-            const providerPatterns = {
-                'SUPERMERCADO ALTABRISA': /SUPERCENTER ALTABRISA/,
-                'SEGURO SALUD': /SFG INB CR/,
-                'AMAZON': /AMAZON/,
-                'UBER': /UBER|GO TAXI/,
-                'NETFLIX': /NETFLIX/,
-                'SPOTIFY': /SPOTIFY/,
-                'OXXO': /OXXO/,
-                'WALMART': /WALMART/,
-                'LIVERPOOL': /LIVERPOOL/,
-                'FARMACIAS SIMILARES': /FARMACIAS SIMILARES|SIMILARES/,
-                'CFE': /CFE/,
-                'TELMEX': /TELMEX/,
-                'TELCEL': /TELCEL/,
-                'PEMEX': /PEMEX/,
-                'CINÉPOLIS': /CINEPOLIS/,
-                'APPLE': /APPLE/,
-                'ANYTIME FITNESS': /ANYTIME FITNESS/,
-                'DAISO': /DAISO/
-            };
-            
-            // Buscar coincidencias
-            for (const [cleanName, pattern] of Object.entries(providerPatterns)) {
-                if (pattern.test(desc)) {
-                    return cleanName;
-                }
-            }
-            
-            // Si no encuentra, usar primeras 2 palabras
-            const words = desc.split(' ').slice(0, 2).join(' ');
-            return words || 'OTROS';
-        }
+        
             // Mostrar tabla de transacciones
             displayTransactionsTable(data.transactions);
         }
