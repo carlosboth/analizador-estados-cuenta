@@ -333,7 +333,7 @@
         // Categorías para análisis de transacciones
         const categories = {
             'Supermercado': [
-                'supercenter', 'supermercado', 'walmart', 'soriana', 'chedraui', 'bodega aurrera'
+            'supercenter', 'supermercado', 'supermercado altabrisa', 'walmart', 'soriana', 'chedraui', 'bodega aurrera'
             ],
             'Ingresos': [
                 'spei recibido', 'deposito', 'depósito', 'transferencia recibida', 
@@ -818,7 +818,7 @@
             // Mapeo de patrones comunes
             const providerPatterns = {
                 'SUPERMERCADO ALTABRISA': /SUPERCENTER ALTABRISA/,
-                'SEGURO SALUD': /SFG INB CR/,
+                'SEGURO SALUD': /SFG INB CR|SPS INB/,
                 'AMAZON': /AMAZON/,
                 'UBER': /UBER|GO TAXI/,
                 'NETFLIX': /NETFLIX/,
