@@ -585,7 +585,13 @@
                 
                 // Llamar a Claude API para procesar el PDF
                 const analysisResult = await analyzeWithClaude(base64Data, false);
-                
+                // 🆕 Validar consistencia
+if (analysisResult.transactions) {
+    const validations = validateCriticalTransactions(analysisResult.transactions);
+    if (!analysisResult.debug) analysisResult.debug = {};
+    analysisResult.debug.validations = validations;
+    analysisResult.debug.consistencyHash = Date.now().toString(36); // Hash simple
+}
                 // Mostrar resultados
                 displayResults(analysisResult);
                 
@@ -782,6 +788,32 @@
                 pdfText: "Estado de cuenta demo"
             };
         }
+        // 🆕 Función para validar transacciones críticas
+function validateCriticalTransactions(transactions) {
+    const validations = {
+        pagosInterbancarios: false,
+        transaccionesGrandes: 0,
+        totalTransacciones: transactions.length
+    };
+
+    // Buscar "PAGOS INTERBANCARIOS" (la transacción problemática)
+    validations.pagosInterbancarios = transactions.some(t => 
+        t.description && t.description.toUpperCase().includes('PAGOS INTERBANCARIOS')
+    );
+
+    // Contar transacciones grandes (>$10,000)
+    validations.transaccionesGrandes = transactions.filter(t => 
+        Math.abs(t.amount) > 10000
+    ).length;
+
+    if (validations.pagosInterbancarios) {
+        console.log('✅ PAGOS INTERBANCARIOS encontrado - procesamiento consistente');
+    } else {
+        console.warn('❌ PAGOS INTERBANCARIOS NO encontrado - posible inconsistencia');
+    }
+
+    return validations;
+}
         
         function groupByProvider(transactions) {
             const providers = {};
@@ -851,6 +883,31 @@
         
         function displayResults(data) {
             processedData = data;
+            // 🆕 Validar consistencia si hay datos de debug
+if (data.debug && data.debug.validations) {
+    const validations = data.debug.validations;
+    
+    if (!validations.pagosInterbancarios && validations.totalTransacciones > 5) {
+        document.getElementById('confidenceAlert').innerHTML += `
+            <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 10px; padding: 15px; margin: 15px 0;">
+                ⚠️ <strong>Advertencia de Consistencia:</strong><br>
+                No se detectó "PAGOS INTERBANCARIOS" en ${validations.totalTransacciones} transacciones.<br>
+                El día de mayor gasto podría variar entre ejecuciones.
+            </div>
+        `;
+    }
+    
+    if (window.location.hash.includes('debug')) {
+        document.getElementById('confidenceAlert').innerHTML += `
+            <div style="background: #e3f2fd; border: 1px solid #2196f3; border-radius: 10px; padding: 15px; margin: 15px 0; font-family: monospace; font-size: 0.9em;">
+                🔍 <strong>Debug Info:</strong><br>
+                Hash: ${data.debug.consistencyHash}<br>
+                Transacciones grandes: ${validations.transaccionesGrandes}<br>
+                PAGOS INTERBANCARIOS: ${validations.pagosInterbancarios ? '✅' : '❌'}
+            </div>
+        `;
+    }
+}
             
             // Ocultar secciones anteriores y mostrar resultados
             document.getElementById('uploadSection').style.display = 'none';
@@ -1066,21 +1123,86 @@
             });
         }
 
-        function createWeeklyChart(transactions) {
+       function createWeeklyChart(transactions) {
     const ctx = document.getElementById('weeklyChart').getContext('2d');
     
-    // Días de la semana en español
+    // 🆕 CORRECCIÓN: Parsing consistente de fechas
     const daysOfWeek = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-    const weeklyData = [0, 0, 0, 0, 0, 0, 0]; // Array para cada día de la semana
+    const weeklyData = [0, 0, 0, 0, 0, 0, 0];
     
-    // Agrupar gastos por día de la semana
-    transactions.forEach(transaction => {
-        if (transaction.amount < 0) { // Solo gastos (valores negativos)
-            const date = new Date(transaction.date);
-            const dayOfWeek = date.getDay(); // 0 = Domingo, 1 = Lunes, etc.
-            weeklyData[dayOfWeek] += Math.abs(transaction.amount);
+    console.log('🔍 Procesando transacciones para gráfico semanal:', transactions.length);
+    
+    // 🆕 Función interna para parsear fechas consistentemente
+    function parseTransactionDate(dateString) {
+        try {
+            if (!dateString) return null;
+            
+            // Si ya es formato YYYY-MM-DD, usar directamente
+            if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                return new Date(dateString + 'T00:00:00.000Z');
+            }
+            
+            // Formato Santander DD-MMM-YYYY
+            if (dateString.includes('-')) {
+                const parts = dateString.split('-');
+                if (parts.length === 3 && parts[2].length === 4) {
+                    const monthMap = {
+                        'ENE': 0, 'FEB': 1, 'MAR': 2, 'ABR': 3, 'MAY': 4, 'JUN': 5,
+                        'JUL': 6, 'AGO': 7, 'SEP': 8, 'OCT': 9, 'NOV': 10, 'DIC': 11,
+                        'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+                        'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+                    };
+                    
+                    const day = parseInt(parts[0], 10);
+                    const month = monthMap[parts[1]] ?? monthMap[parts[1].toUpperCase()];
+                    const year = parseInt(parts[2], 10);
+                    
+                    if (!isNaN(day) && month !== undefined && !isNaN(year)) {
+                        return new Date(Date.UTC(year, month, day));
+                    }
+                }
+            }
+            
+            // Fallback: usar Date constructor
+            return new Date(dateString);
+        } catch (error) {
+            console.error('Error parseando fecha:', dateString, error);
+            return null;
+        }
+    }
+    
+    // 🆕 Agrupar con parsing consistente
+    transactions.forEach((transaction, index) => {
+        if (transaction.amount >= 0) return; // Solo gastos
+        
+        const parsedDate = parseTransactionDate(transaction.date);
+        if (!parsedDate || isNaN(parsedDate.getTime())) {
+            console.warn(`⚠️ Fecha inválida en transacción ${index}:`, transaction.date);
+            return;
+        }
+        
+        const dayOfWeek = parsedDate.getUTCDay(); // Usar UTC
+        const amount = Math.abs(transaction.amount);
+        weeklyData[dayOfWeek] += amount;
+        
+        // 🆕 Log para debugging (solo las primeras 5 transacciones)
+        if (index < 5) {
+            console.log(`📅 ${transaction.date} → ${daysOfWeek[dayOfWeek]} (${dayOfWeek}) → $${amount}`);
         }
     });
+    
+    // 🆕 Log del resultado final
+    console.log('📊 Resultado final por día:');
+    weeklyData.forEach((amount, index) => {
+        if (amount > 0) {
+            console.log(`  ${daysOfWeek[index]}: $${amount.toFixed(2)}`);
+        }
+    });
+    
+    // Encontrar día de mayor gasto
+    const maxAmount = Math.max(...weeklyData);
+    const maxDayIndex = weeklyData.indexOf(maxAmount);
+    console.log(`🏆 Día de mayor gasto: ${daysOfWeek[maxDayIndex]} con $${maxAmount.toFixed(2)}`);
 
     if (weeklyChart) weeklyChart.destroy();
 
@@ -1092,13 +1214,8 @@
                 label: 'Gastos por Día',
                 data: weeklyData,
                 backgroundColor: [
-                    '#FF6B6B', // Domingo - Rojo
-                    '#4ECDC4', // Lunes - Turquesa
-                    '#45B7D1', // Martes - Azul
-                    '#96CEB4', // Miércoles - Verde claro
-                    '#FFEAA7', // Jueves - Amarillo
-                    '#DDA0DD', // Viernes - Lila
-                    '#98D8C8'  // Sábado - Verde agua
+                    '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', 
+                    '#FFEAA7', '#DDA0DD', '#98D8C8'
                 ],
                 borderWidth: 2,
                 borderColor: '#fff',
@@ -1108,9 +1225,7 @@
         options: {
             responsive: true,
             plugins: {
-                legend: {
-                    display: false
-                },
+                legend: { display: false },
                 tooltip: {
                     callbacks: {
                         label: function(context) {
@@ -1125,23 +1240,13 @@
             scales: {
                 y: {
                     beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return '$' + value.toLocaleString();
-                        }
-                    }
+                    ticks: { callback: function(value) { return '$' + value.toLocaleString(); } }
                 },
-                x: {
-                    ticks: {
-                        maxRotation: 45,
-                        minRotation: 0
-                    }
-                }
+                x: { ticks: { maxRotation: 45, minRotation: 0 } }
             }
         }
     });
 
-    // ✨ NUEVOS INSIGHTS PARA EL GRÁFICO SEMANAL ✨
     generateWeeklyInsights(weeklyData, daysOfWeek);
 }
 
